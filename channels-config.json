@@ -1,0 +1,44 @@
+{
+  "channels": [
+    {
+      "id": 1,
+      "name": "abc",
+      "videos": [
+        {
+          "filename": "1765439683433-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
+          "originalName": "1765439683433-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
+          "size": 11804825
+        },
+        {
+          "filename": "1765459513682-Shubh - You and Me (Official Audio).mp4",
+          "originalName": "1765459513682-Shubh - You and Me (Official Audio).mp4",
+          "size": 5196634
+        },
+        {
+          "filename": "1765462548222-Shubh - You and Me (Official Audio).mp4",
+          "originalName": "1765462548222-Shubh - You and Me (Official Audio).mp4",
+          "size": 5196634
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "name": "new channel",
+      "videos": [
+        {
+          "filename": "1765459513682-Shubh - You and Me (Official Audio).mp4",
+          "originalName": "1765459513682-Shubh - You and Me (Official Audio).mp4",
+          "size": 5196634,
+          "addedAt": "2025-12-11T15:09:35.752Z"
+        },
+        {
+          "filename": "1765439683433-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
+          "originalName": "1765439683433-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
+          "size": 11804825
+        }
+      ],
+      "enabled": true
+    }
+  ]
+}

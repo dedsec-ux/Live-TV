@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Stream Test - Named Pipes</title>
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        h1 {
+            text-align: center;
+            color: #667eea;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .player-wrapper {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .video-js {
+            width: 100%;
+            height: 600px;
+        }
+
+        .status {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .live-badge {
+            background: #ff4757;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎬 Named Pipes Test Stream</h1>
+
+        <div class="status">
+            <div class="live-badge">🔴 LIVE</div>
+            <h3>Stream URL:</h3>
+            <p id="streamUrl" style="word-break: break-all;">Loading...</p>
+            <button onclick="reloadPlayer()"
+                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">
+                🔄 Reload Player
+            </button>
+        </div>
+
+        <div class="player-wrapper">
+            <video id="test-player" class="video-js vjs-default-skin" controls preload="auto">
+                <source id="videoSource" src="" type="application/x-mpegURL">
+            </video>
+        </div>
+
+        <div class="status">
+            <h3>Stream Info:</h3>
+            <p>✅ Named Pipes system active</p>
+            <p>✅ Zero-downtime updates enabled</p>
+            <p>✅ 24/7 continuous streaming</p>
+            <p id="videoCount">Videos in playlist: Loading...</p>
+        </div>
+    </div>
+
+    <script>
+        const channelId = 1;
+        const baseUrl = window.location.origin;
+        const streamUrl = `${baseUrl}/hls/live${channelId}/stream.m3u8`;
+
+        document.getElementById('streamUrl').textContent = streamUrl;
+        document.getElementById('videoSource').src = streamUrl;
+
+        // Initialize Video.js player
+        const player = videojs('test-player', {
+            liveui: true,
+            autoplay: false,
+            controls: true,
+            preload: 'auto'
+        });
+
+        // Load the stream
+        player.src({
+            src: streamUrl,
+            type: 'application/x-mpegURL'
+        });
+
+        // Error handling
+        player.on('error', function () {
+            const error = player.error();
+            console.error('Player error:', error);
+            alert('Stream error: ' + (error ? error.message : 'Unknown error'));
+        });
+
+        // Success
+        player.on('loadedmetadata', function () {
+            console.log('Stream loaded successfully!');
+        });
+
+        player.on('playing', function () {
+            console.log('Stream is playing!');
+        });
+
+        // Reload player function
+        function reloadPlayer() {
+            player.src({
+                src: streamUrl,
+                type: 'application/x-mpegURL'
+            });
+            player.load();
+            player.play();
+        }
+
+        // Fetch channel info
+        fetch(`${baseUrl.replace(':8080', ':3000')}/api/channels`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.channels[0]) {
+                    const videoCount = data.channels[0].videos.length;
+                    document.getElementById('videoCount').textContent =
+                        `Videos in playlist: ${videoCount} (${data.channels[0].videos.map(v => v.originalName || v.filename).join(', ')})`;
+                }
+            })
+            .catch(e => console.error('Error fetching channel info:', e));
+
+        // Auto-play after a moment
+        setTimeout(() => {
+            player.play().catch(e => {
+                console.log('Autoplay prevented, click play button');
+            });
+        }, 1000);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INBV Live Stream</title>
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+        }
+
+        #embed-player {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .video-js {
+            width: 100%;
+            height: 100%;
+        }
+
+        .vjs-big-play-button {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <video id="embed-player" class="video-js vjs-default-skin" controls autoplay muted playsinline></video>
+
+    <script>
+        // Get channel ID from URL parameter or default to 1
+        const urlParams = new URLSearchParams(window.location.search);
+        const channelId = urlParams.get('channel') || '1';
+        const autoplay = urlParams.get('autoplay') !== '0'; // Default true
+        const muted = urlParams.get('muted') !== '0'; // Default true for autoplay
+
+
+        // Build stream URL
+        const streamUrl = `${window.location.origin}/hls/live${channelId}/stream.m3u8`;
+        // Initialize player
+        const player = videojs('embed-player', {
+            controls: true,
+            autoplay: autoplay,
+            muted: muted,
+            preload: 'auto',
+            liveui: true,
+            fluid: false,
+            fill: true,
+            responsive: true,
+            controlBar: {
+                pictureInPictureToggle: true,
+                fullscreenToggle: true
+            }
+        });
+
+        // Set source
+        player.src({
+            src: streamUrl,
+            type: 'application/x-mpegURL'
+        });
+
+        // Auto-retry on errors
+        let retryCount = 0;
+        const maxRetries = 5;
+
+        player.on('error', function () {
+            const error = player.error();
+            console.error('Stream error:', error);
+
+            if (retryCount < maxRetries) {
+                retryCount++;
+                console.log(`Retrying... (${retryCount}/${maxRetries})`);
+
+                setTimeout(() => {
+                    player.src({
+                        src: streamUrl,
+                        type: 'application/x-mpegURL'
+                    });
+                    player.load();
+                    if (autoplay) {
+                        player.play().catch(e => console.log('Autoplay prevented'));
+                    }
+                }, 2000 * retryCount);
+            }
+        });
+
+        // Reset retry count on success
+        player.on('playing', function () {
+            retryCount = 0;
+            console.log('Stream playing successfully');
+        });
+
+
+        // Start playback
+        player.ready(function () {
+            if (autoplay) {
+                player.play().catch(function (error) {
+                    console.log('Autoplay was prevented. Unmute and click play.');
+                    // If autoplay fails, show play button
+                    player.muted(false);
+                });
+            }
+        });
+
+        // Maintain live edge
+        player.on('timeupdate', function () {
+            const liveTracker = player.liveTracker;
+            if (liveTracker && liveTracker.isLive() && !liveTracker.atLiveEdge()) {
+                // If we're more than 10 seconds behind live, jump to live edge
+                const behindLive = liveTracker.liveCurrentTime() - player.currentTime();
+                if (behindLive > 10) {
+                    player.currentTime(liveTracker.seekableEnd());
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

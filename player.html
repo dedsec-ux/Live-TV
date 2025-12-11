@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INBV VOD-to-Live Streaming Player</title>
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 8px 20px;
+            background: #10b981;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+
+        .channels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .channel-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .channel-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .channel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .channel-name {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .live-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .live-badge.live {
+            background: #10b981;
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        .live-badge.offline {
+            background: #ef4444;
+            color: white;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .video-js {
+            width: 100% !important;
+            height: 300px !important;
+            border-radius: 10px;
+        }
+
+        .channel-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f3f4f6;
+            border-radius: 10px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #6b7280;
+        }
+
+        .info-value {
+            color: #1f2937;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+
+        .copy-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: background 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: #5568d3;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+
+        .no-channels {
+            text-align: center;
+            color: white;
+            padding: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+        }
+
+        .no-channels h2 {
+            margin-bottom: 15px;
+        }
+
+        .admin-link {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .admin-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .instructions h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .instructions ul {
+            list-style-position: inside;
+            line-height: 1.8;
+        }
+
+        .instructions li {
+            margin-bottom: 10px;
+        }
+
+        code {
+            background: #f3f4f6;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-family: monospace;
+            color: #ef4444;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            padding: 20px;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .channels-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .subtitle {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 INBV VOD-to-Live Streaming</h1>
+            <p class="subtitle">Multi-Channel Live Streaming System</p>
+            <div class="status" id="systemStatus">� Loading...</div>
+        </header>
+
+        <div id="loadingMessage" class="loading">Loading channels...</div>
+        <div class="channels-grid" id="channelsContainer" style="display: none;"></div>
+        <div id="noChannelsMessage" class="no-channels" style="display: none;">
+            <h2>📺 No Channels Available</h2>
+            <p>No channels are currently configured or streaming.</p>
+            <p style="margin-top: 10px;">Create channels and start streaming from the admin panel.</p>
+            <a href="/admin.html" class="admin-link">🎛️ Go to Admin Panel</a>
+        </div>
+
+        <div class="instructions" id="instructions" style="display: none;">
+            <h2>📖 How to Use</h2>
+            <ul>
+                <li>Click play on any channel card to start watching</li>
+                <li>Use the <strong>Copy</strong> buttons to copy stream URLs</li>
+                <li>HLS URLs work in web browsers and mobile apps</li>
+                <li>RTMP URLs work in VLC, OBS, and other media players</li>
+                <li>Streams loop 24/7 with configured videos</li>
+                <li>View statistics at: <code>http://localhost:8080/stat</code></li>
+                <li>Manage channels at: <code>http://localhost:8080/admin.html</code></li>
+            </ul>
+        </div>
+
+        <footer>
+            <p>🎥 INBV VOD-to-Live Streaming System | Powered by Nginx-RTMP & FFmpeg</p>
+        </footer>
+    </div>
+
+    <script>
+        const API_URL = `${window.location.protocol}//${window.location.host}/api`;
+        const players = {};
+        let channels = [];
+        let activeStreamsCount = 0;
+
+        // Initialize - load channels from API
+        async function init() {
+            try {
+                await loadChannels();
+                setInterval(updateChannelStatuses, 5000); // Check status every 5 seconds
+            } catch (error) {
+                console.error('Error initializing:', error);
+                showError();
+            }
+        }
+
+        // Load channels from API
+        async function loadChannels() {
+            try {
+                const response = await fetch(`${API_URL}/channels`);
+                const data = await response.json();
+
+                if (data.success && data.channels) {
+                    channels = data.channels.filter(ch => ch.enabled && ch.videos.length > 0);
+
+                    if (channels.length > 0) {
+                        renderChannels();
+                        document.getElementById('instructions').style.display = 'block';
+                    } else {
+                        showNoChannels();
+                    }
+                } else {
+                    showNoChannels();
+                }
+            } catch (error) {
+                console.error('Error loading channels:', error);
+                showError();
+            }
+        }
+
+        // Render channels dynamically
+        function renderChannels() {
+            const container = document.getElementById('channelsContainer');
+            const loading = document.getElementById('loadingMessage');
+
+            loading.style.display = 'none';
+            container.style.display = 'grid';
+            container.innerHTML = '';
+
+            channels.forEach((channel, index) => {
+                const card = createChannelCard(channel, index);
+                container.appendChild(card);
+            });
+
+            // Initialize all video players
+            setTimeout(() => {
+                channels.forEach((channel, index) => {
+                    const playerId = `player-${channel.id}`;
+                    const player = videojs(playerId, {
+                        controls: true,
+                        autoplay: false,
+                        preload: 'auto',
+                        liveui: true
+                    });
+
+                    // Auto-retry on errors
+                    let retryCount = 0;
+                    const maxRetries = 10;
+                    const baseDelay = 2000; // 2 seconds
+
+                    player.on('error', function () {
+                        const error = player.error();
+                        console.log(`[Player ${channel.id}] Error:`, error);
+
+                        if (retryCount < maxRetries) {
+                            // Exponential backoff: 2s, 4s, 8s, 16s, 32s (max)
+                            const delay = Math.min(baseDelay * Math.pow(2, retryCount), 32000);
+                            retryCount++;
+
+                            console.log(`[Player ${channel.id}] Retrying in ${delay / 1000}s... (attempt ${retryCount}/${maxRetries})`);
+
+                            // Show retry message
+                            const errorDisplay = player.errorDisplay;
+                            if (errorDisplay) {
+                                errorDisplay.contentEl().innerHTML = `
+                                    <div style="text-align: center; padding: 20px;">
+                                        <div style="font-size: 1.2em; margin-bottom: 10px;">🔄 Connection Lost</div>
+                                        <div>Retrying in ${delay / 1000} seconds...</div>
+                                        <div style="font-size: 0.9em; margin-top: 10px; opacity: 0.8;">Attempt ${retryCount}/${maxRetries}</div>
+                                    </div>
+                                `;
+                            }
+
+                            setTimeout(() => {
+                                console.log(`[Player ${channel.id}] Reloading stream...`);
+                                player.src({
+                                    src: getStreamUrl('hls', channel.id),
+                                    type: 'application/x-mpegURL'
+                                });
+                                player.load();
+                                player.play().catch(e => console.log('Autoplay prevented:', e));
+                            }, delay);
+                        } else {
+                            console.log(`[Player ${channel.id}] Max retries reached`);
+                            const errorDisplay = player.errorDisplay;
+                            if (errorDisplay) {
+                                errorDisplay.contentEl().innerHTML = `
+                                    <div style="text-align: center; padding: 20px;">
+                                        <div style="font-size: 1.2em; margin-bottom: 10px;">❌ Connection Failed</div>
+                                        <div>Unable to connect after ${maxRetries} attempts</div>
+                                        <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                            🔄 Reload Page
+                                        </button>
+                                    </div>
+                                `;
+                            }
+                        }
+                    });
+
+                    // Reset retry count on successful playback
+                    player.on('playing', function () {
+                        retryCount = 0;
+                        console.log(`[Player ${channel.id}] Playing successfully, retry count reset`);
+                    });
+
+                    players[channel.id] = player;
+                });
+
+                // Check initial statuses
+                updateChannelStatuses();
+            }, 500);
+        }
+
+        // Create channel card HTML
+        function createChannelCard(channel, index) {
+            const div = document.createElement('div');
+            div.className = 'channel-card';
+            div.id = `channel-card-${channel.id}`;
+
+            const videoCount = channel.videos.length;
+            const videoList = videoCount > 0
+                ? channel.videos.map(v => v.originalName || v.filename).join(', ')
+                : 'No videos';
+
+            div.innerHTML = `
+                <div class="channel-header">
+                    <div class="channel-name">📺 ${channel.name}</div>
+                    <div class="live-badge offline" id="badge-${channel.id}">⏹️ Offline</div>
+                </div>
+                <div id="player-container-${channel.id}">
+                    <video id="player-${channel.id}" class="video-js vjs-default-skin" controls preload="auto" style="display: none;">
+                        <source src="${getStreamUrl('hls', channel.id)}" type="application/x-mpegURL">
+                    </video>
+                    <div id="offline-message-${channel.id}" class="offline-message" style="display: flex; align-items: center; justify-content: center; height: 300px; background: #1f2937; border-radius: 10px; color: white; text-align: center; flex-direction: column;">
+                        <div style="font-size: 3em; margin-bottom: 10px;">📺</div>
+                        <div style="font-size: 1.5em; font-weight: bold; margin-bottom: 8px;">Channel Offline</div>
+                        <div style="opacity: 0.7;">This channel is not currently streaming</div>
+                    </div>
+                </div>
+                <div class="channel-info">
+                    <div class="info-item">
+                        <span class="info-label">Videos:</span>
+                        <span class="info-value">${videoCount} video(s)</span>
+                    </div>
+                    <div class="info-item" style="flex-direction: column; align-items: flex-start;">
+                        <span class="info-label" style="margin-bottom: 5px;">Content:</span>
+                        <span class="info-value" style="word-break: break-all;">${videoList}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Embed Link:</span>
+                        <button class="copy-btn" onclick="copyEmbedCode(${channel.id})">Copy Embed Code</button>
+                    </div>
+                </div>
+            `;
+
+            return div;
+        }
+
+        // Update all channel statuses
+        async function updateChannelStatuses() {
+            activeStreamsCount = 0;
+
+            for (const channel of channels) {
+                try {
+                    const response = await fetch(`${API_URL}/channels/${channel.id}/status`);
+                    const data = await response.json();
+
+                    if (data.success && data.status.running) {
+                        updateChannelStatus(channel.id, true);
+                        activeStreamsCount++;
+                    } else {
+                        updateChannelStatus(channel.id, false);
+                    }
+                } catch (error) {
+                    console.error(`Error checking status for channel ${channel.id}:`, error);
+                    updateChannelStatus(channel.id, false);
+                }
+            }
+
+            updateSystemStatus();
+        }
+
+        // Update single channel status display
+        function updateChannelStatus(channelId, isLive) {
+            const badge = document.getElementById(`badge-${channelId}`);
+            const player = document.getElementById(`player-${channelId}`);
+            const offlineMessage = document.getElementById(`offline-message-${channelId}`);
+
+            if (badge) {
+                if (isLive) {
+                    badge.className = 'live-badge live';
+                    badge.innerHTML = '🔴 LIVE';
+
+                    // Show player, hide offline message
+                    if (player) player.style.display = 'block';
+                    if (offlineMessage) offlineMessage.style.display = 'none';
+                } else {
+                    badge.className = 'live-badge offline';
+                    badge.innerHTML = '⏹️ Offline';
+
+                    // Hide player, show offline message
+                    if (player) player.style.display = 'none';
+                    if (offlineMessage) offlineMessage.style.display = 'flex';
+                }
+            }
+        }
+
+        // Update system status
+        function updateSystemStatus() {
+            const statusEl = document.getElementById('systemStatus');
+            if (activeStreamsCount > 0) {
+                statusEl.innerHTML = `🟢 ${activeStreamsCount} STREAM${activeStreamsCount > 1 ? 'S' : ''} LIVE`;
+                statusEl.style.background = '#10b981';
+            } else {
+                statusEl.innerHTML = '🟡 NO ACTIVE STREAMS';
+                statusEl.style.background = '#f59e0b';
+            }
+        }
+
+        // Show no channels message
+        function showNoChannels() {
+            document.getElementById('loadingMessage').style.display = 'none';
+            document.getElementById('noChannelsMessage').style.display = 'block';
+            document.getElementById('systemStatus').innerHTML = '🟡 NO CHANNELS';
+            document.getElementById('systemStatus').style.background = '#f59e0b';
+        }
+
+        // Show error message
+        function showError() {
+            document.getElementById('loadingMessage').innerHTML = `
+                <h2>⚠️ Error Loading Channels</h2>
+                <p>Make sure the API server is running on port 3000</p>
+                <p style="margin-top: 10px;">Run: <code style="color: white; background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px;">node api-server.js</code></p>
+            `;
+        }
+
+        // Get stream URL based on current hostname
+        function getStreamUrl(type, channelId) {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+
+            // Don't include port for ngrok or domain names, only for localhost/IP addresses
+            const isLocalOrIP = hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+            const portPart = isLocalOrIP ? ':8080' : '';
+
+            if (type === 'hls') {
+                return `${protocol}//${hostname}${portPart}/hls/live${channelId}/stream.m3u8`;
+            } else if (type === 'rtmp') {
+                return `rtmp://${hostname}/live${channelId}/stream`;
+            }
+        }
+
+        // Copy to clipboard function
+        // Copy embed code to clipboard
+        function copyEmbedCode(channelId) {
+            const baseUrl = window.location.origin;
+            const embedCode = `<iframe src="${baseUrl}/embed.html?channel=${channelId}&autoplay=1&muted=1" width="100%" height="600" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+
+            navigator.clipboard.writeText(embedCode).then(() => {
+                const toast = document.createElement('div');
+                toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: white; color: #667eea; padding: 15px 25px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; font-weight: bold;';
+                toast.textContent = '✅ Embed code copied to clipboard!';
+                document.body.appendChild(toast);
+
+                setTimeout(() => {
+                    toast.remove();
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy embed code');
+            });
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Create a temporary toast notification
+                const toast = document.createElement('div');
+                toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: white; color: #667eea; padding: 15px 25px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; font-weight: bold;';
+                toast.textContent = '✅ Copied to clipboard!';
+                document.body.appendChild(toast);
+
+                setTimeout(() => {
+                    toast.remove();
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', init);
+    </script>
+</body>
+
+</html>
