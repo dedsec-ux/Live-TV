@@ -171,8 +171,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
         }
 
         .videos-section {
@@ -371,14 +378,32 @@
         }
 
         @keyframes slideIn {
-            from { transform: translateX(400px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
 
-        .toast.success { border-left: 5px solid #10b981; }
-        .toast.error { border-left: 5px solid #ef4444; }
-        .toast.warning { border-left: 5px solid #f59e0b; }
-        .toast.info { border-left: 5px solid #3b82f6; }
+        .toast.success {
+            border-left: 5px solid #10b981;
+        }
+
+        .toast.error {
+            border-left: 5px solid #ef4444;
+        }
+
+        .toast.warning {
+            border-left: 5px solid #f59e0b;
+        }
+
+        .toast.info {
+            border-left: 5px solid #3b82f6;
+        }
 
         .progress-bar {
             width: 100%;
@@ -426,6 +451,7 @@
             .channels-grid {
                 grid-template-columns: 1fr;
             }
+
             h1 {
                 font-size: 1.8em;
             }
@@ -497,8 +523,7 @@
             <form onsubmit="createChannel(event)">
                 <div class="form-group">
                     <label class="form-label">Channel Name</label>
-                    <input type="text" id="newChannelName" class="form-input" required 
-                           placeholder="Enter channel name">
+                    <input type="text" id="newChannelName" class="form-input" required placeholder="Enter channel name">
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="submit" class="btn btn-success" style="flex: 1;">
@@ -518,9 +543,9 @@
             <div class="modal-header">Upload Videos to <span id="uploadChannelName"></span></div>
             <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
                 <p style="font-size: 1.2em; margin-bottom: 10px;">🎬 Click or Drag & Drop videos here</p>
-                <p style="color: #6b7280;">Supported: MP4, AVI, MOV, MKV, FLV (Max 500MB each)</p>
-                <input type="file" id="fileInput" accept="video/*" multiple style="display: none;" 
-                       onchange="handleFileUpload(this.files)">
+                <p style="color: #6b7280;">Supported: MP4, AVI, MOV, MKV, FLV (Up to 10GB per file)</p>
+                <input type="file" id="fileInput" accept="video/*" multiple style="display: none;"
+                    onchange="handleFileUpload(this.files)">
                 <div id="uploadProgress" style="margin-top: 20px; display: none;">
                     <p id="uploadStatus">Uploading...</p>
                     <div class="progress-bar">
@@ -569,7 +594,7 @@
         // Render channels
         function renderChannels() {
             const container = document.getElementById('channelsContainer');
-            
+
             if (allChannels.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -676,7 +701,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, enabled: true })
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToast(`✅ Channel "${name}" created successfully!`, 'success');
@@ -743,7 +768,7 @@
                                 size: data.file.size
                             })
                         });
-                        
+
                         showToast(`✅ ${file.name} uploaded!`, 'success');
                     } else {
                         showToast(`❌ Failed to upload ${file.name}`, 'error');
@@ -793,7 +818,7 @@
                 const response = await fetch(`${API_URL}/channels/${channelId}/videos/${filename}`, {
                     method: 'DELETE'
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToast('✅ Video permanently deleted', 'success');
@@ -810,14 +835,14 @@
         async function deleteChannel(channelId) {
             const channel = allChannels.find(c => c.id === channelId);
             const videoCount = channel.videos.length;
-            
+
             if (!confirm(`⚠️ Delete channel "${channel.name}"?\n\nThis will:\n• Stop the stream if running\n• Remove all ${videoCount} video(s) from the channel\n• DELETE video files permanently\n\nAre you sure?`)) return;
 
             try {
                 const response = await fetch(`${API_URL}/channels/${channelId}`, {
                     method: 'DELETE'
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToast('✅ Channel deleted', 'success');
@@ -836,7 +861,7 @@
                 const response = await fetch(`${API_URL}/channels/${channelId}/start`, {
                     method: 'POST'
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToast('✅ Channel started!', 'success');
@@ -855,7 +880,7 @@
                 const response = await fetch(`${API_URL}/channels/${channelId}/stop`, {
                     method: 'POST'
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     showToast('✅ Channel stopped', 'success');
@@ -961,4 +986,5 @@
         window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
+
 </html>

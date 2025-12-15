@@ -23,8 +23,8 @@ const LOGS_DIR = path.join(BASE_DIR, 'logs');
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '50mb' })); // Increased for large video metadata
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files (HTML, CSS, JS) from root directory
 app.use(express.static(BASE_DIR));
@@ -76,7 +76,7 @@ const upload = multer({
             cb(new Error('Only video files are allowed!'));
         }
     },
-    limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit
+    limits: { fileSize: 10 * 1024 * 1024 * 1024 } // 10GB limit - supports large videos
 });
 
 // Load or create config
