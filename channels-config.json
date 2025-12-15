@@ -2,40 +2,26 @@
   "channels": [
     {
       "id": 1,
-      "name": "abc",
+      "name": "Retro",
       "videos": [
         {
-          "filename": "1765439683433-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
-          "originalName": "1765439683433-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
-          "size": 11804825
-        },
-        {
-          "filename": "1765459513682-Shubh - You and Me (Official Audio).mp4",
-          "originalName": "1765459513682-Shubh - You and Me (Official Audio).mp4",
-          "size": 5196634
-        },
-        {
-          "filename": "1765462548222-Shubh - You and Me (Official Audio).mp4",
-          "originalName": "1765462548222-Shubh - You and Me (Official Audio).mp4",
-          "size": 5196634
+          "filename": "1765775882164-Shubh - You and Me (Official Audio).mp4",
+          "originalName": "Shubh - You and Me (Official Audio).mp4",
+          "size": 5196634,
+          "addedAt": "2025-12-15T05:18:05.340Z"
         }
       ],
       "enabled": true
     },
     {
       "id": 2,
-      "name": "new channel",
+      "name": "hello",
       "videos": [
         {
-          "filename": "1765459513682-Shubh - You and Me (Official Audio).mp4",
-          "originalName": "1765459513682-Shubh - You and Me (Official Audio).mp4",
-          "size": 5196634,
-          "addedAt": "2025-12-11T15:09:35.752Z"
-        },
-        {
-          "filename": "1765439683433-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
-          "originalName": "1765439683433-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
-          "size": 11804825
+          "filename": "1765775938527-Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
+          "originalName": "Fa9la - Flipperachi Prod by DJ Outlaw Official Audio (EXTENDED VERSION).mp4",
+          "size": 11804825,
+          "addedAt": "2025-12-15T05:19:08.667Z"
         }
       ],
       "enabled": true

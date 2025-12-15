@@ -13,11 +13,6 @@ const VideoStreamer = require('./lib/video-streamer');
 const app = express();
 const PORT = 3000;
 
-// Middleware
-app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
 // Paths
 const BASE_DIR = __dirname;
 const VIDEOS_DIR = path.join(BASE_DIR, 'videos');
@@ -25,6 +20,14 @@ const PLAYLISTS_DIR = path.join(BASE_DIR, 'playlists');
 const CONFIG_FILE = path.join(BASE_DIR, 'channels-config.json');
 const PIDS_DIR = path.join(BASE_DIR, 'pids');
 const LOGS_DIR = path.join(BASE_DIR, 'logs');
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Serve static files (HTML, CSS, JS) from root directory
+app.use(express.static(BASE_DIR));
 
 // State management for Named Pipes
 const activeStreamers = new Map(); // channelId -> VideoStreamer
@@ -41,7 +44,18 @@ const activeFfmpeg = new Map();    // channelId -> FFmpeg process
 // Configure multer for video uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, VIDEOS_DIR);
+        // If channelId is provided, store in channel-specific directory
+        const channelId = req.body.channelId;
+        let destDir = VIDEOS_DIR;
+
+        if (channelId) {
+            destDir = path.join(VIDEOS_DIR, `channel${channelId}`);
+            if (!fs.existsSync(destDir)) {
+                fs.mkdirSync(destDir, { recursive: true });
+            }
+        }
+
+        cb(null, destDir);
     },
     filename: (req, file, cb) => {
         const uniqueName = Date.now() + '-' + file.originalname;
@@ -189,6 +203,17 @@ app.delete('/api/channels/:id', (req, res) => {
             // Stop the channel first
             stopChannel(channelId);
 
+            // Delete all videos in channel-specific directory
+            const channelVideosDir = path.join(VIDEOS_DIR, `channel${channelId}`);
+            if (fs.existsSync(channelVideosDir)) {
+                const files = fs.readdirSync(channelVideosDir);
+                files.forEach(file => {
+                    fs.unlinkSync(path.join(channelVideosDir, file));
+                });
+                fs.rmdirSync(channelVideosDir);
+                console.log(`[DELETE] Removed channel directory: ${channelVideosDir}`);
+            }
+
             // Delete playlist file
             const playlistPath = path.join(PLAYLISTS_DIR, `playlist${channelId}.txt`);
             if (fs.existsSync(playlistPath)) {
@@ -203,7 +228,7 @@ app.delete('/api/channels/:id', (req, res) => {
 
             config.channels.splice(channelIndex, 1);
             saveConfig(config);
-            res.json({ success: true, message: 'Channel deleted successfully' });
+            res.json({ success: true, message: 'Channel and all its videos deleted successfully' });
         } else {
             res.status(404).json({ success: false, error: 'Channel not found' });
         }
@@ -236,7 +261,7 @@ app.post('/api/channels/:id/videos', (req, res) => {
     }
 });
 
-// Remove video from channel
+// Remove video from channel and DELETE permanently
 app.delete('/api/channels/:channelId/videos/:videoFilename', (req, res) => {
     try {
         const config = loadConfig();
@@ -245,9 +270,25 @@ app.delete('/api/channels/:channelId/videos/:videoFilename', (req, res) => {
 
         if (channel) {
             const wasRunning = getChannelStatus(channelId).running;
+            const videoFilename = req.params.videoFilename;
 
-            // Remove video from channel
-            channel.videos = channel.videos.filter(v => v.filename !== req.params.videoFilename);
+            // PERMANENTLY DELETE the video file
+            const channelVideoPath = path.join(VIDEOS_DIR, `channel${channelId}`, videoFilename);
+            const globalVideoPath = path.join(VIDEOS_DIR, videoFilename);
+
+            let deleted = false;
+            if (fs.existsSync(channelVideoPath)) {
+                fs.unlinkSync(channelVideoPath);
+                deleted = true;
+                console.log(`[DELETE] Permanently deleted: ${channelVideoPath}`);
+            } else if (fs.existsSync(globalVideoPath)) {
+                fs.unlinkSync(globalVideoPath);
+                deleted = true;
+                console.log(`[DELETE] Permanently deleted: ${globalVideoPath}`);
+            }
+
+            // Remove video from channel config
+            channel.videos = channel.videos.filter(v => v.filename !== videoFilename);
             saveConfig(config);
 
             // Regenerate playlist
@@ -278,6 +319,7 @@ app.delete('/api/channels/:channelId/videos/:videoFilename', (req, res) => {
             res.json({
                 success: true,
                 channel,
+                deleted: deleted,
                 wasRestarted: wasRunning && channel.videos.length > 0,
                 wasStopped: wasRunning && channel.videos.length === 0
             });
@@ -452,7 +494,21 @@ function generatePlaylist(channelId) {
 
     const playlistPath = path.join(PLAYLISTS_DIR, `playlist${channelId}.txt`);
     const playlistContent = channel.videos
-        .map(video => `file '${path.join(VIDEOS_DIR, video.filename)}'`)
+        .map(video => {
+            // Check channel-specific directory first, then fall back to global
+            const channelVideoPath = path.join(VIDEOS_DIR, `channel${channelId}`, video.filename);
+            const globalVideoPath = path.join(VIDEOS_DIR, video.filename);
+
+            if (fs.existsSync(channelVideoPath)) {
+                return `file '${channelVideoPath}'`;
+            } else if (fs.existsSync(globalVideoPath)) {
+                return `file '${globalVideoPath}'`;
+            } else {
+                console.warn(`[PLAYLIST] Video not found: ${video.filename}`);
+                return null;
+            }
+        })
+        .filter(Boolean)
         .join('\n');
 
     fs.writeFileSync(playlistPath, playlistContent);
@@ -484,20 +540,12 @@ async function startChannel(channelId) {
         console.log(`[START-PIPE] Pipe created: ${pipeManager.getPath()}`);
 
 
-        // 2. Start FFmpeg reading from pipe with simple RTMP output
+        // 2. Start FFmpeg reading from pipe with 1080p RTMP output
         const ffmpegArgs = [
             '-re',
             '-i', pipeManager.getPath(),
-            '-c:v', 'libx264',
-            '-preset', 'veryfast',
-            '-maxrate', '3000k',
-            '-bufsize', '6000k',
-            '-pix_fmt', 'yuv420p',
-            '-g', '50',
-            '-c:a', 'aac',
-            '-b:a', '128k',
-            '-ac', '2',
-            '-ar', '44100',
+            '-c:v', 'copy',  // Copy video (already encoded by VideoStreamer)
+            '-c:a', 'copy',  // Copy audio (already encoded by VideoStreamer)
             '-f', 'flv',
             `rtmp://localhost/live${channelId}/stream`
         ];
@@ -524,6 +572,14 @@ async function startChannel(channelId) {
                 fs.unlinkSync(pidPath);
             }
             activeFfmpeg.delete(channelId);
+
+            // Stop VideoStreamer to prevent writing to dead pipe
+            const streamer = activeStreamers.get(channelId);
+            if (streamer) {
+                console.log(`[START-PIPE] Stopping VideoStreamer due to FFmpeg exit`);
+                streamer.stop();
+                activeStreamers.delete(channelId);
+            }
 
             // Clean up pipe if FFmpeg dies
             const pipe = activePipes.get(channelId);

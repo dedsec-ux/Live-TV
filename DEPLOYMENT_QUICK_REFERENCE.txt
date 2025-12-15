@@ -1,0 +1,319 @@
+┌─────────────────────────────────────────────────────────────────────┐
+│        LINUX SERVER DEPLOYMENT - QUICK START GUIDE                  │
+│              INBV VOD Live Streaming Server                         │
+└─────────────────────────────────────────────────────────────────────┘
+
+📋 STEP-BY-STEP DEPLOYMENT CHECKLIST
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 1: SYSTEM PREPARATION (10 minutes)                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+1️⃣  Connect to Server
+   ssh root@YOUR_SERVER_IP
+
+2️⃣  Update System
+   sudo apt update && sudo apt upgrade -y
+
+3️⃣  Install Build Tools
+   sudo apt install -y build-essential git curl wget unzip
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 2: INSTALL DEPENDENCIES (15 minutes)                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+4️⃣  Install Node.js 18
+   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+   sudo apt install -y nodejs
+
+5️⃣  Install FFmpeg
+   sudo apt install -y ffmpeg
+
+6️⃣  Install Nginx with RTMP
+   sudo apt install -y nginx libnginx-mod-rtmp
+
+   Verify RTMP module:
+   nginx -V 2>&1 | grep rtmp
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 3: CONFIGURE NGINX (20 minutes)                               │
+└─────────────────────────────────────────────────────────────────────┘
+
+7️⃣  Backup Original Config
+   sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+
+8️⃣  Replace nginx.conf
+   sudo nano /etc/nginx/nginx.conf
+   
+   📝 Copy configuration from LINUX_DEPLOYMENT_GUIDE.md Section 6
+
+9️⃣  Create HLS Directories
+   sudo mkdir -p /var/www/html/hls/{live1,live2,live3,live4,live5,live6,live7,live8,live9,live10}
+   sudo chown -R www-data:www-data /var/www/html/hls
+   sudo chmod -R 755 /var/www/html/hls
+
+🔟 Test & Start Nginx
+   sudo nginx -t
+   sudo systemctl enable nginx
+   sudo systemctl start nginx
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 4: PROJECT SETUP (15 minutes)                                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+1️⃣1️⃣ Create Project Directory
+   sudo mkdir -p /opt/inbv-streaming
+   cd /opt/inbv-streaming
+
+1️⃣2️⃣ Upload Project Files
+   
+   FROM YOUR MAC:
+   cd ~/Desktop/company/inbv\ VOD\ live\ server
+   scp -r * root@YOUR_SERVER_IP:/opt/inbv-streaming/
+
+1️⃣3️⃣ Install NPM Dependencies
+   cd /opt/inbv-streaming
+   npm install
+
+1️⃣4️⃣ Create Required Directories
+   mkdir -p videos/{channel1,channel2,channel3,channel4,channel5,channel6,channel7,channel8,channel9,channel10}
+   mkdir -p playlists pids logs lib
+   chmod -R 755 videos playlists pids logs lib
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 5: SETUP WEB FILES (5 minutes)                                │
+└─────────────────────────────────────────────────────────────────────┘
+
+1️⃣5️⃣ Copy HTML Files to Nginx
+   cd /opt/inbv-streaming
+   sudo cp *.html /var/www/html/
+   sudo chown -R www-data:www-data /var/www/html
+   sudo chmod -R 755 /var/www/html
+
+1️⃣6️⃣ Verify Files Copied
+   ls -lh /var/www/html/*.html
+
+   ✅ Should see:
+      - admin.html
+      - admin-v2.html
+      - player.html
+      - embed.html
+      - index.html
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 6: AUTO-START SERVICE (10 minutes)                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+1️⃣7️⃣ Create Systemd Service
+   sudo nano /etc/systemd/system/inbv-api.service
+
+   📝 Copy service configuration from LINUX_DEPLOYMENT_GUIDE.md Step 14
+
+1️⃣8️⃣ Enable & Start Service
+   sudo systemctl daemon-reload
+   sudo systemctl enable inbv-api
+   sudo systemctl start inbv-api
+
+1️⃣9️⃣ Verify Running
+   sudo systemctl status inbv-api
+   
+   ✅ Should show: "active (running)"
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 7: FIREWALL SETUP (5 minutes)                                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+2️⃣0️⃣ Configure UFW
+   sudo ufw allow 22/tcp      # SSH
+   sudo ufw allow 80/tcp      # HTTP
+   sudo ufw allow 443/tcp     # HTTPS
+   sudo ufw allow 1935/tcp    # RTMP
+   sudo ufw allow 3000/tcp    # API
+   sudo ufw enable
+
+2️⃣1️⃣ Verify Firewall
+   sudo ufw status
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PHASE 8: TESTING (10 minutes)                                       │
+└─────────────────────────────────────────────────────────────────────
+
+2️⃣2️⃣ Check All Services
+   sudo systemctl status nginx inbv-api
+
+2️⃣3️⃣ Verify Listening Ports
+   sudo netstat -tulpn | grep LISTEN
+
+   ✅ Should show:
+      :80   (nginx HTTP)
+      :1935 (nginx RTMP)
+      :3000 (Node.js API)
+
+2️⃣4️⃣ Access Admin Panel
+   Browser: http://YOUR_SERVER_IP/admin-v2.html
+
+2️⃣5️⃣ Create Test Channel
+   1. Click "Create New Channel"
+   2. Upload a test video
+   3. Start stream
+   4. Verify at: http://YOUR_SERVER_IP/stat
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ KEY DIRECTORIES & FILES                                             │
+└─────────────────────────────────────────────────────────────────────┘
+
+Project Files:    /opt/inbv-streaming/
+Web Files:        /var/www/html/
+Videos:           /opt/inbv-streaming/videos/
+HLS Streams:      /var/www/html/hls/
+Logs:             /opt/inbv-streaming/logs/
+Nginx Config:     /etc/nginx/nginx.conf
+Service File:     /etc/systemd/system/inbv-api.service
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ESSENTIAL COMMANDS                                                   │
+└─────────────────────────────────────────────────────────────────────┘
+
+🔄 Restart Services:
+   sudo systemctl restart nginx
+   sudo systemctl restart inbv-api
+
+📝 View Logs:
+   sudo journalctl -u inbv-api -f
+   sudo tail -f /var/log/nginx/error.log
+
+✅ Check Status:
+   sudo systemctl status nginx inbv-api
+   sudo netstat -tulpn | grep LISTEN
+
+🧪 Test Config:
+   sudo nginx -t
+
+🔥 Firewall Status:
+   sudo ufw status
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ACCESS POINTS                                                        │
+└─────────────────────────────────────────────────────────────────────┘
+
+Admin Panel V2:   http://YOUR_IP/admin-v2.html
+Admin Panel V1:   http://YOUR_IP/admin.html
+Player:           http://YOUR_IP/player.html
+RTMP Stats:       http://YOUR_IP/stat
+HLS Stream:       http://YOUR_IP/hls/live1/stream.m3u8
+
+API Endpoints:    http://YOUR_IP/api/channels
+                  http://YOUR_IP/api/upload
+                  http://YOUR_IP/api/videos
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ TROUBLESHOOTING                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+❌ Problem: 502 Bad Gateway
+   ✅ Fix: sudo systemctl restart inbv-api
+
+❌ Problem: Can't upload videos
+   ✅ Fix: sudo chown -R www-data:www-data /opt/inbv-streaming/videos
+           sudo chmod -R 755 /opt/inbv-streaming/videos
+
+❌ Problem: Stream won't start
+   ✅ Fix: Check FFmpeg: which ffmpeg
+           Check RTMP: sudo netstat -tulpn | grep 1935
+
+❌ Problem: Can't access from internet
+   ✅ Fix: sudo ufw allow 80/tcp
+           sudo ufw allow 1935/tcp
+
+❌ Problem: Service won't start
+   ✅ Fix: Check logs: sudo journalctl -u inbv-api -n 50
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PRODUCTION CHECKLIST                                                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+Before Going Live:
+☐ All services running (nginx + inbv-api)
+☐ Firewall configured and enabled
+☐ Admin panel accessible
+☐ Test channel created and streaming
+☐ HLS streams accessible
+☐ Auto-start on boot enabled
+☐ SSL certificate installed (optional)
+☐ Backup strategy in place
+☐ Monitoring setup
+☐ Domain pointed to server (if using)
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ PERFORMANCE MONITORING                                               │
+└─────────────────────────────────────────────────────────────────────┘
+
+🔍 Check CPU Usage:
+   top
+   htop (install: sudo apt install htop)
+
+💾 Check Disk Space:
+   df -h
+
+🌐 Check Network:
+   iftop (install: sudo apt install iftop)
+
+📊 Check Processes:
+   ps aux | grep -E "nginx|node|ffmpeg"
+
+🔥 Check Active Connections:
+   sudo netstat -an | grep :1935
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MAINTENANCE SCHEDULE                                                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+Daily:
+  • Check service status
+  • Monitor disk space
+  • Review error logs
+
+Weekly:
+  • Update system packages
+  • Clean old logs
+  • Verify backups
+
+Monthly:
+  • Review and archive old videos
+  • Update SSL certificates
+  • Performance review
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ESTIMATED DEPLOYMENT TIME                                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+Fresh Server: 90 minutes total
+  • System prep: 10 min
+  • Dependencies: 15 min
+  • Nginx config: 20 min
+  • Project setup: 15 min
+  • Web files: 5 min
+  • Service setup: 10 min
+  • Firewall: 5 min
+  • Testing: 10 min
+
+Experienced: 45-60 minutes
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ SUPPORT & DOCUMENTATION                                              │
+└─────────────────────────────────────────────────────────────────────┘
+
+📖 Full Guide: LINUX_DEPLOYMENT_GUIDE.md
+📊 Admin V2: ADMIN_V2_GUIDE.md
+🎥 1080p Config: 1080P_CONFIGURATION.md
+🐛 Error Fixes: EPIPE_FIX_DOCUMENTATION.md
+
+For issues: Check the full guide or logs!
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                    DEPLOYMENT COMPLETE! 🚀                          │
+│                                                                      │
+│  Your 24/7 streaming server is ready for 10 channels @ 1080p!      │
+│                                                                      │
+│  Access: http://YOUR_SERVER_IP/admin-v2.html                       │
+└─────────────────────────────────────────────────────────────────────┘
