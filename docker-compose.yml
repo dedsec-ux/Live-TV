@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  inbv-streaming:
+    build: .
+    container_name: inbv-streaming-server
+    ports:
+      - "80:80"       # HTTP
+      - "8080:8080"   # HTTP Alternative
+      - "1935:1935"   # RTMP
+      - "3000:3000"   # API
+    volumes:
+      # Persist video files
+      - ./videos:/opt/inbv-streaming/videos
+      # Persist playlists
+      - ./playlists:/opt/inbv-streaming/playlists
+      # Persist logs
+      - ./logs:/opt/inbv-streaming/logs
+      # Persist HLS streams
+      - ./hls:/var/www/html/hls
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/admin-v2.html"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

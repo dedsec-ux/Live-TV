@@ -1,0 +1,385 @@
+┌─────────────────────────────────────────────────────────────────────┐
+│         AWS EC2 DEPLOYMENT - QUICK REFERENCE                        │
+│              INBV Streaming Server                                  │
+└─────────────────────────────────────────────────────────────────────┘
+
+🎯 GOAL: Deploy your Docker project to AWS EC2 in 30 minutes
+
+═══════════════════════════════════════════════════════════════════════
+
+📋 WHAT YOU NEED:
+
+✅ AWS Account (free tier available)
+✅ Credit card (for verification, free tier won't charge)
+✅ Your project folder (already have it!)
+✅ 30 minutes
+
+═══════════════════════════════════════════════════════════════════════
+
+💰 COST ESTIMATE:
+
+┌──────────────────┬──────────┬─────────┬────────────────┐
+│ Instance Type    │ vCPU/RAM │ Cost    │ Best For       │
+├──────────────────┼──────────┼─────────┼────────────────┤
+│ t2.micro         │ 1/1GB    │ FREE*   │ Testing        │
+│ t3.small         │ 2/2GB    │ $15/mo  │ 3-5 channels   │
+│ t3.medium        │ 2/4GB    │ $30/mo  │ 10 channels ✅ │
+│ t3.large         │ 2/8GB    │ $60/mo  │ 15+ channels   │
+└──────────────────┴──────────┴─────────┴────────────────┘
+
+* FREE for first 12 months (750 hours/month)
+
+═══════════════════════════════════════════════════════════════════════
+
+🚀 DEPLOYMENT STEPS:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Create AWS Account (5 min)                             │
+└─────────────────────────────────────────────────────────────────┘
+
+1. Go to: https://aws.amazon.com
+2. Click "Create an AWS Account"
+3. Fill in details + payment info
+4. Verify phone number
+5. Done! (Gets 12 months free tier)
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: Launch EC2 Instance (10 min)                           │
+└─────────────────────────────────────────────────────────────────┘
+
+1. Login to AWS Console
+2. Search "EC2" → Click EC2
+3. Click "Launch Instance"
+4. Configure:
+
+   Name: INBV-Streaming-Server
+   
+   AMI: Ubuntu Server 22.04 LTS
+   
+   Instance Type: t3.medium (or t2.micro for free tier)
+   
+   Key Pair: Create new
+     - Name: inbv-streaming-key
+     - Type: RSA, Format: .pem
+     - DOWNLOAD AND SAVE!
+   
+   Network Settings:
+     Security Group Name: inbv-streaming-sg
+     
+     Add Rules:
+     ┌──────────┬──────┬────────────────┬──────────────┐
+     │ Type     │ Port │ Source         │ Description  │
+     ├──────────┼──────┼────────────────┼──────────────┤
+     │ SSH      │ 22   │ My IP          │ SSH Access   │
+     │ HTTP     │ 80   │ 0.0.0.0/0      │ Admin/HLS    │
+     │ Custom   │ 1935 │ 0.0.0.0/0      │ RTMP         │
+     │ Custom   │ 3000 │ 0.0.0.0/0      │ API          │
+     │ Custom   │ 8080 │ 0.0.0.0/0      │ HTTP Alt     │
+     └──────────┴──────┴────────────────┴──────────────┘
+   
+   Storage: 30 GB gp3
+
+5. Click "Launch Instance"
+6. Wait for Status: Running
+7. Note your PUBLIC IP: ___.___.___.___ (write this down!)
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Connect to EC2 (5 min)                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+# On your Mac:
+
+# Move key file
+mv ~/Downloads/inbv-streaming-key.pem ~/.ssh/
+chmod 400 ~/.ssh/inbv-streaming-key.pem
+
+# Connect (replace YOUR_IP)
+ssh -i ~/.ssh/inbv-streaming-key.pem ubuntu@YOUR_IP
+
+# Type "yes" when prompted
+
+# You're now on EC2! ✅
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: Upload Project (5 min)                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+# NEW terminal on Mac (not the SSH one):
+
+cd ~/Desktop/company
+tar -czf inbv-streaming.tar.gz "inbv VOD live server"
+scp -i ~/.ssh/inbv-streaming-key.pem inbv-streaming.tar.gz ubuntu@YOUR_IP:/home/ubuntu/
+
+# Wait for upload (2-5 min)
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 5: Install Docker on EC2 (3 min)                          │
+└─────────────────────────────────────────────────────────────────┘
+
+# Back in SSH terminal (on EC2):
+
+# Update
+sudo apt update
+
+# Install Docker
+curl -fsSL https://get.docker.com | sudo sh
+
+# Add user to docker group
+sudo usermod -aG docker ubuntu
+newgrp docker
+
+# Verify
+docker --version
+
+# Install docker-compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 6: Deploy Your App! (7 min)                               │
+└─────────────────────────────────────────────────────────────────┘
+
+# Extract project
+cd /home/ubuntu
+tar -xzf inbv-streaming.tar.gz
+mv "inbv VOD live server" inbv-streaming
+cd inbv-streaming
+
+# Deploy!
+chmod +x deploy.sh
+./deploy.sh
+
+# Select: 1 (Build and Run)
+
+# Wait 5-10 min for Docker build...
+
+# You'll see:
+# ✅ Nginx started successfully
+# ✅ Node.js API Server started
+# ✅ Container is running!
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 7: Access Your Server! (DONE!)                            │
+└─────────────────────────────────────────────────────────────────┘
+
+Open browser:
+
+http://YOUR_EC2_IP/admin-v2.html
+
+SHARE THIS URL WITH ANYONE! 🎉
+
+═══════════════════════════════════════════════════════════════════
+
+🎮 MANAGING YOUR SERVER:
+
+# Connect to EC2
+ssh -i ~/.ssh/inbv-streaming-key.pem ubuntu@YOUR_IP
+
+# View logs
+docker logs -f inbv-streaming-server
+
+# Stop container
+docker-compose down
+
+# Start container
+docker-compose up -d
+
+# Restart container
+docker restart inbv-streaming-server
+
+# Rebuild after changes
+cd /home/ubuntu/inbv-streaming
+docker-compose down
+docker-compose build
+docker-compose up -d
+
+# Check status
+docker ps
+docker stats
+
+# System monitoring
+htop
+df -h
+
+═══════════════════════════════════════════════════════════════════
+
+🌐 OPTIONAL: ADD DOMAIN
+
+1. Point domain to EC2 IP:
+   - In DNS: A Record → YOUR_EC2_IP
+   
+2. Access via domain:
+   http://streaming.yourdomain.com/admin-v2.html
+
+3. Add SSL (HTTPS):
+   sudo docker exec -it inbv-streaming-server bash
+   apt update && apt install -y certbot
+   certbot --nginx -d streaming.yourdomain.com
+
+═══════════════════════════════════════════════════════════════════
+
+🔒 SECURITY CHECKLIST:
+
+☐ Security groups configured (ports 22, 80, 1935, 3000)
+☐ Key pair saved safely
+☐ Enable UFW firewall:
+  sudo ufw allow 22,80,1935,3000,8080/tcp
+  sudo ufw enable
+
+☐ Install Fail2Ban (blocks brute force):
+  sudo apt install -y fail2ban
+
+☐ Keep system updated:
+  sudo apt update && sudo apt upgrade -y
+
+═══════════════════════════════════════════════════════════════════
+
+📊 ACCESS POINTS:
+
+Admin Panel V2:  http://YOUR_IP/admin-v2.html
+Admin Panel V1:  http://YOUR_IP/admin.html
+Player:          http://YOUR_IP/player.html
+RTMP Stats:      http://YOUR_IP/stat
+API:             http://YOUR_IP:3000/api/channels
+
+HLS Streams:     http://YOUR_IP/hls/live1/stream.m3u8
+                 http://YOUR_IP/hls/live2/stream.m3u8
+                 ... (up to live10)
+
+═══════════════════════════════════════════════════════════════════
+
+💡 TIPS:
+
+1. FREE Testing:
+   - Use t2.micro for first 12 months (FREE)
+   - Test everything before upgrading
+
+2. Cost Savings:
+   - Stop instance when not needed (pay only storage ~$2/mo)
+   - Use Reserved Instances for 30-70% discount
+   - Committed to 1 year? Save money!
+
+3. Scaling:
+   - Need more power? Change instance type anytime
+   - Instance → Actions → Change Instance Type
+   - Your data stays intact!
+
+4. Backups:
+   - Snapshot your instance regularly
+   - EC2 → Instances → Actions → Create Image
+
+═══════════════════════════════════════════════════════════════════
+
+🐛 TROUBLESHOOTING:
+
+Can't SSH?
+  → Check Security Group allows your IP on port 22
+  → Verify: chmod 400 ~/.ssh/inbv-streaming-key.pem
+
+Can't Access Admin?
+  → Check Security Group allows 0.0.0.0/0 on port 80
+  → docker logs inbv-streaming-server
+  → docker restart inbv-streaming-server
+
+Out of Disk?
+  → df -h (check space)
+  → docker system prune -a (clean)
+  → Or expand EBS volume in AWS Console
+
+═══════════════════════════════════════════════════════════════════
+
+✅ DEPLOYMENT CHECKLIST:
+
+☐ AWS account created
+☐ EC2 instance launched (Ubuntu 22.04)
+☐ Security group configured (all ports)
+☐ Key pair downloaded and saved
+☐ Can SSH into instance
+☐ Docker installed
+☐ Project uploaded
+☐ Container built and running
+☐ Can access admin panel
+☐ Tested creating channel
+☐ Tested uploading video
+☐ Tested streaming
+
+═══════════════════════════════════════════════════════════════════
+
+📝 COMMAND QUICK REFERENCE:
+
+# Connect
+ssh -i ~/.ssh/inbv-streaming-key.pem ubuntu@YOUR_IP
+
+# Upload files
+scp -i ~/.ssh/inbv-streaming-key.pem file.tar.gz ubuntu@YOUR_IP:/home/ubuntu/
+
+# Deploy
+cd /home/ubuntu/inbv-streaming
+./deploy.sh
+
+# Logs
+docker logs -f inbv-streaming-server
+
+# Restart
+docker restart inbv-streaming-server
+
+# Stop/Start
+docker-compose down
+docker-compose up -d
+
+# Status
+docker ps
+docker stats inbv-streaming-server
+
+# System
+htop
+df -h
+free -h
+
+═══════════════════════════════════════════════════════════════════
+
+🎯 INSTANCE TYPES RECOMMENDATION:
+
+Testing (1-2 channels):
+  → t2.micro (FREE tier)
+
+Production (3-5 channels):
+  → t3.small ($15/month)
+
+Production (10 channels):
+  → t3.medium ($30/month) ✅ RECOMMENDED
+
+Heavy Load (15+ channels):
+  → t3.large ($60/month)
+
+═══════════════════════════════════════════════════════════════════
+
+📊 MONTHLY COST BREAKDOWN:
+
+t3.medium Instance:  $30.40/month
+30GB EBS Storage:    $2.40/month
+Data Transfer Out:   ~$10-20/month (depending on viewers)
+───────────────────────────────────
+TOTAL:              ~$45-55/month
+
+Can be reduced with:
+- Reserved Instances (-30%)
+- Stop when not needed
+- Optimize data transfer
+
+═══════════════════════════════════────────────────────────────────
+
+🎉 YOU'RE LIVE ON AWS EC2!
+
+Your streaming server is now:
+✅ Accessible worldwide
+✅ Running 24/7
+✅ Professional infrastructure
+✅ Scalable
+✅ Reliable
+
+Access: http://YOUR_EC2_IP/admin-v2.html
+
+For detailed guide, see: AWS_EC2_DEPLOYMENT.md
+
+═══════════════════════════════════════════════════════════════════

@@ -1,0 +1,407 @@
+┌─────────────────────────────────────────────────────────────────────┐
+│         DOCKER DEPLOYMENT - COPY & RUN QUICK GUIDE                  │
+│            INBV VOD Live Streaming Server                           │
+└─────────────────────────────────────────────────────────────────────┘
+
+🎯 THE EASIEST WAY: Just 3 Commands!
+
+═══════════════════════════════════════════════════════════════════════
+
+📦 WHAT'S INCLUDED IN THE DOCKER IMAGE:
+
+✅ Ubuntu 22.04 Linux
+✅ Nginx 1.24 with RTMP module  
+✅ FFmpeg (latest)
+✅ Node.js 18 LTS
+✅ All project dependencies
+✅ Complete configuration
+
+═══════════════════════════════════════════════════════════════════════
+
+🚀 DEPLOYMENT IN 3 COMMANDS:
+
+On your Linux server:
+
+1️⃣  Install Docker:
+   curl -fsSL https://get.docker.com | sudo sh
+
+2️⃣  Upload project folder (via SCP/SFTP/Git)
+
+3️⃣  Run this:
+   cd your-project-folder
+   ./deploy.sh
+
+   (Select option 1: Build and Run)
+
+DONE! ✨ Server is running!
+
+═══════════════════════════════════════════════════════════════════════
+
+📋 DETAILED STEP-BY-STEP:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Install Docker on Linux Server                         │
+└─────────────────────────────────────────────────────────────────┘
+
+ssh root@YOUR_SERVER_IP
+
+# Quick install (one command)
+curl -fsSL https://get.docker.com | sudo sh
+
+# Start Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Verify
+docker --version
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: Upload Your Project                                    │
+└─────────────────────────────────────────────────────────────────┘
+
+Option A - SCP from Mac:
+────────────────────────
+cd ~/Desktop/company
+tar -czf streaming.tar.gz "inbv VOD live server"
+scp streaming.tar.gz root@YOUR_SERVER_IP:/root/
+
+On server:
+cd /root
+tar -xzf streaming.tar.gz
+mv "inbv VOD live server" inbv-streaming
+
+Option B - Git:
+───────────────
+git clone YOUR_REPO inbv-streaming
+
+Option C - SFTP/FileZilla:
+───────────────────────────
+Use GUI to upload project folder
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Build & Run                                            │
+└─────────────────────────────────────────────────────────────────┘
+
+cd /root/inbv-streaming
+
+# Use the deployment script (easiest)
+./deploy.sh
+
+# Or manually:
+docker build -t inbv-streaming:latest .
+docker run -d \
+  --name inbv-streaming \
+  -p 80:80 -p 1935:1935 -p 3000:3000 \
+  -v $(pwd)/videos:/opt/inbv-streaming/videos \
+  --restart unless-stopped \
+  inbv-streaming:latest
+
+# Or with docker-compose:
+docker-compose up -d
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: Access Your Server                                     │
+└─────────────────────────────────────────────────────────────────┘
+
+Open browser:
+http://YOUR_SERVER_IP/admin-v2.html
+
+═══════════════════════════════════════════════════════════════════════
+
+🎛️  MANAGEMENT COMMANDS:
+
+Start Container:
+  docker start inbv-streaming
+  # OR: docker-compose start
+
+Stop Container:
+  docker stop inbv-streaming
+  # OR: docker-compose stop
+
+Restart Container:
+  docker restart inbv-streaming
+  # OR: docker-compose restart
+
+View Logs:
+  docker logs -f inbv-streaming
+  # OR: docker-compose logs -f
+
+Container Shell:
+  docker exec -it inbv-streaming bash
+
+Check Status:
+  docker ps
+
+Remove Container:
+  docker-compose down
+  # OR: docker stop inbv-streaming && docker rm inbv-streaming
+
+Rebuild After Changes:
+  docker-compose down
+  docker-compose build
+  docker-compose up -d
+
+═══════════════════════════════════════════════════════════════════════
+
+📂 PROJECT STRUCTURE FOR DOCKER:
+
+inbv-streaming/
+├── Dockerfile                  ← Docker build instructions
+├── docker-compose.yml          ← Easy management config
+├── deploy.sh                   ← Interactive deployment script
+├── .dockerignore               ← Files to exclude from image
+├── docker/
+│   ├── nginx.conf              ← Nginx configuration
+│   └── start.sh                ← Container startup script
+├── api-server.js               ← Node.js API
+├── *.html                      ← Admin panels, player
+├── lib/                        ← VideoStreamer, PipeManager
+├── videos/                     ← Uploaded videos (persisted)
+├── playlists/                  ← Auto-generated (persisted)
+├── logs/                       ← Server logs (persisted)
+└── package.json                ← Node dependencies
+
+═══════════════════════════════════════════════════════════════════════
+
+🔌 PORT MAPPINGS:
+
+Server Port  →  Container Port  →  Service
+─────────────────────────────────────────────
+    80       →      80          →  HTTP (Admin Panel, Player, HLS)
+   8080      →     8080         →  HTTP Alternative
+   1935      →     1935         →  RTMP (Streaming input)
+   3000      →     3000         →  Node.js API
+
+Access admin panel:
+  http://YOUR_SERVER_IP:80/admin-v2.html
+  http://YOUR_SERVER_IP/admin-v2.html     (port 80 is default)
+
+═══════════════════════════════════════════════════════════════════════
+
+💾 PERSISTENT DATA (Survives container restarts/rebuilds):
+
+These folders are mapped to your server's filesystem:
+
+  videos/      → All uploaded videos
+  playlists/   → Channel playlists
+  logs/        → Application logs
+  hls/         → HLS stream segments
+
+Even if you delete the container, these files remain!
+
+═══════════════════════════════════════════════════════════════════════
+
+🔧 COMMON TASKS:
+
+Update HTML Files:
+  # On server
+  cd /root/inbv-streaming
+  docker cp admin-v2.html inbv-streaming:/var/www/html/
+  docker restart inbv-streaming
+
+Update Backend Code:
+  # On server
+  cd /root/inbv-streaming
+  # Edit files or upload new ones
+  docker-compose down
+  docker-compose build
+  docker-compose up -d
+
+Add More Channels:
+  # Edit docker/nginx.conf
+  # Add more "application live11 {}" blocks
+  docker-compose build
+  docker-compose up -d
+
+Backup Everything:
+  tar -czf backup-$(date +%Y%m%d).tar.gz videos/ playlists/ logs/
+
+Restore Backup:
+  tar -xzf backup-YYYYMMDD.tar.gz
+
+═══════════════════════════════════════════════════════════════════════
+
+🐛 TROUBLESHOOTING:
+
+Container Won't Start:
+  docker logs inbv-streaming
+  # Check for port conflicts:
+  sudo netstat -tulpn | grep -E '80|1935|3000'
+
+Can't Access Admin Panel:
+  # Check if container is running:
+  docker ps | grep inbv
+  
+  # Check firewall:
+  sudo ufw allow 80/tcp
+  sudo ufw allow 1935/tcp
+
+Port Already in Use:
+  # Find what's using the port:
+  sudo lsof -i :80
+  
+  # Stop it or change Docker ports:
+  docker run -p 8080:80 ...  # Use port 8080 instead
+
+Low on Disk Space:
+  # Clean old Docker images:
+  docker system prune -a
+  
+  # Check space:
+  df -h
+
+Container Crashes:
+  # Check logs:
+  docker logs inbv-streaming
+  
+  # Check memory:
+  docker stats
+
+═══════════════════════════════════════════════════════════════════════
+
+🚦 DEPLOYMENT SCRIPT MENU:
+
+When you run: ./deploy.sh
+
+You'll see:
+  1. Build and Run (First time)
+  2. Start Existing Container
+  3. Stop Container
+  4. Restart Container
+  5. View Logs
+  6. Rebuild from Scratch
+  7. Remove Everything
+  8. Exit
+
+Just type the number and press Enter!
+
+═══════════════════════════════════════════════════════════════════════
+
+⚡ QUICK DEPLOYMENT CHEAT SHEET:
+
+First Time Setup:
+  curl -fsSL https://get.docker.com | sudo sh
+  cd your-project
+  ./deploy.sh  → Select 1
+
+Daily Operations:
+  ./deploy.sh  → Select 2 (Start)
+  ./deploy.sh  → Select 3 (Stop)
+  ./deploy.sh  → Select 5 (Logs)
+
+After Code Changes:
+  ./deploy.sh  → Select 6 (Rebuild)
+
+Emergency Restart:
+  docker restart inbv-streaming
+
+═══════════════════════════════════════════════════════════════════════
+
+📊 MONITORING:
+
+Check Container Status:
+  docker ps
+  
+Resource Usage:
+  docker stats inbv-streaming
+  
+Health Check:
+  docker inspect inbv-streaming | grep -i health
+  
+Active Streams:
+  curl http://localhost/stat
+  
+View All Logs:
+  docker logs --tail 100 inbv-streaming
+
+═══════════════════════════════════════════════════════════════════════
+
+🎯 COMPARISON: Docker vs Manual
+
+╔═══════════════════╦═══════════════╦═══════════════════════╗
+║ Aspect            ║ Docker        ║ Manual Installation   ║
+╠═══════════════════╬═══════════════╬═══════════════════════╣
+║ Setup Time        ║ 15 minutes    ║ 90 minutes            ║
+║ Commands Needed   ║ 3 commands    ║ 25+ commands          ║
+║ Difficulty        ║ Easy          ║ Advanced              ║
+║ Portability       ║ Any server    ║ Server-specific       ║
+║ Updates           ║ Rebuild       ║ Manual updates        ║
+║ Isolation         ║ Fully         ║ System-wide           ║
+║ Rollback          ║ Easy          ║ Difficult             ║
+║ Dependencies      ║ Auto          ║ Manual install        ║
+╚═══════════════════╩═══════════════╩═══════════════════════╝
+
+═══════════════════════════════════════════════════════════════════════
+
+✅ DEPLOYMENT CHECKLIST:
+
+Before deploying:
+☐ Docker installed on server
+☐ Project uploaded to server
+☐ Ports 80, 1935, 3000 available
+☐ At least 4GB RAM available
+☐ At least 100GB disk space
+
+After deploying:
+☐ Container is running (docker ps)
+☐ Can access admin panel
+☐ Can create a test channel
+☐ Can upload a test video
+☐ Can start a test stream
+☐ HLS stream is accessible
+☐ Container auto-restarts on reboot
+
+═══════════════════════════════════════════════════════════════════════
+
+💡 PRO TIPS:
+
+1. Use docker-compose for easier management:
+   docker-compose up -d        # Start
+   docker-compose logs -f      # Logs
+   docker-compose restart      # Restart
+
+2. Monitor resource usage:
+   docker stats inbv-streaming
+
+3. Limit container resources (if needed):
+   Edit docker-compose.yml to add resource limits
+
+4. Enable log rotation:
+   Already configured in docker-compose.yml!
+
+5. Backup regularly:
+   tar -czf backup.tar.gz videos/ playlists/ logs/
+
+6. Use the deploy.sh script:
+   It's the fastest way to manage everything!
+
+═══════════════════════════════════════════════════════════════════════
+
+🌐 ACCESS POINTS SUMMARY:
+
+After deployment, access these URLs:
+
+Admin Panel V2:  http://YOUR_IP/admin-v2.html  ← Recommended
+Admin Panel V1:  http://YOUR_IP/admin.html
+Video Player:    http://YOUR_IP/player.html
+RTMP Stats:      http://YOUR_IP/stat
+API Docs:        http://YOUR_IP/api/channels
+
+HLS Streams:     http://YOUR_IP/hls/live1/stream.m3u8
+                 http://YOUR_IP/hls/live2/stream.m3u8
+                 ... (up to live10)
+
+═══════════════════════════════════════════════════════════════════════
+
+📝 SUMMARY:
+
+✨ Copy your project folder to Linux server
+✨ Install Docker (one command)
+✨ Run ./deploy.sh
+✨ Access http://YOUR_IP/admin-v2.html
+
+THAT'S IT! Your 10-channel 1080p streaming server is live! 🚀
+
+═══════════════════════════════════════════════════════════════════════
+
+For full documentation, see: DOCKER_DEPLOYMENT_GUIDE.md
