@@ -17,9 +17,10 @@ const PORT = 3000;
 const BASE_DIR = __dirname;
 const VIDEOS_DIR = path.join(BASE_DIR, 'videos');
 const PLAYLISTS_DIR = path.join(BASE_DIR, 'playlists');
-const CONFIG_FILE = path.join(BASE_DIR, 'channels-config.json');
-const PIDS_DIR = path.join(BASE_DIR, 'pids');
 const LOGS_DIR = path.join(BASE_DIR, 'logs');
+const PIDS_DIR = path.join(BASE_DIR, 'pids');
+const HLS_DIR = path.join(BASE_DIR, 'hls');
+const CONFIG_FILE = path.join(BASE_DIR, 'channels-config.json');
 
 // Middleware
 app.use(cors());
@@ -141,6 +142,21 @@ app.post('/api/channels', (req, res) => {
             videos: [],
             enabled: true
         };
+
+        // Create HLS directory for this channel
+        const hlsChannelDir = path.join(HLS_DIR, `live${newId}`);
+        if (!fs.existsSync(hlsChannelDir)) {
+            fs.mkdirSync(hlsChannelDir, { recursive: true });
+            console.log(`[CREATE] Created HLS directory: ${hlsChannelDir}`);
+        }
+
+        // Create channel-specific videos directory
+        const channelVideosDir = path.join(VIDEOS_DIR, `channel${newId}`);
+        if (!fs.existsSync(channelVideosDir)) {
+            fs.mkdirSync(channelVideosDir, { recursive: true });
+            console.log(`[CREATE] Created videos directory: ${channelVideosDir}`);
+        }
+
         config.channels.push(newChannel);
         saveConfig(config);
         res.json({ success: true, channel: newChannel });
@@ -224,6 +240,17 @@ app.delete('/api/channels/:id', (req, res) => {
             const logPath = path.join(LOGS_DIR, `live${channelId}.log`);
             if (fs.existsSync(logPath)) {
                 fs.unlinkSync(logPath);
+            }
+
+            // Delete HLS directory and all its files
+            const hlsChannelDir = path.join(HLS_DIR, `live${channelId}`);
+            if (fs.existsSync(hlsChannelDir)) {
+                const hlsFiles = fs.readdirSync(hlsChannelDir);
+                hlsFiles.forEach(file => {
+                    fs.unlinkSync(path.join(hlsChannelDir, file));
+                });
+                fs.rmdirSync(hlsChannelDir);
+                console.log(`[DELETE] Removed HLS directory: ${hlsChannelDir}`);
             }
 
             config.channels.splice(channelIndex, 1);

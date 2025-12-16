@@ -218,11 +218,31 @@
             margin-bottom: 10px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
             transition: all 0.2s;
+            cursor: move;
         }
 
         .video-item:hover {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             transform: translateX(3px);
+        }
+
+        .video-item.dragging {
+            opacity: 0.5;
+        }
+
+        .video-item.drag-over {
+            border-top: 3px solid #667eea;
+        }
+
+        .drag-handle {
+            cursor: grab;
+            color: #9ca3af;
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
         }
 
         .video-info {
@@ -546,10 +566,23 @@
                 <p style="color: #6b7280;">Supported: MP4, AVI, MOV, MKV, FLV (Up to 10GB per file)</p>
                 <input type="file" id="fileInput" accept="video/*" multiple style="display: none;"
                     onchange="handleFileUpload(this.files)">
-                <div id="uploadProgress" style="margin-top: 20px; display: none;">
-                    <p id="uploadStatus">Uploading...</p>
-                    <div class="progress-bar">
+                <div id="uploadProgress"
+                    style="margin-top: 20px; display: none; background: #f0f9ff; padding: 20px; border-radius: 10px; border: 2px solid #3b82f6;">
+                    <p id="uploadStatus"
+                        style="font-weight: 600; color: #1e3c72; margin-bottom: 15px; font-size: 1.05em;">Uploading...
+                    </p>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span id="uploadPercentage"
+                            style="font-weight: bold; color: #3b82f6; font-size: 1.3em;">0%</span>
+                        <span id="uploadSpeed" style="color: #059669; font-weight: 600; font-size: 1.1em;">0 MB/s</span>
+                    </div>
+                    <div class="progress-bar" style="height: 12px; margin-bottom: 10px;">
                         <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #6b7280;">
+                        <span><strong>Uploaded:</strong> <span id="uploadedSize">0 MB</span></span>
+                        <span><strong>Total:</strong> <span id="totalSize">0 MB</span></span>
                     </div>
                 </div>
             </div>
@@ -572,6 +605,7 @@
         async function init() {
             await loadChannels();
             setupDragDrop();
+            setupVideoDragDrop();
             // Auto-refresh every 5 seconds
             setInterval(checkAllStatuses, 5000);
         }
@@ -614,6 +648,9 @@
                 const card = createChannelCard(channel);
                 container.appendChild(card);
             });
+
+            // Setup drag and drop for videos after rendering
+            setTimeout(() => setupVideoDragDrop(), 100);
         }
 
         // Create channel card
@@ -624,8 +661,12 @@
 
             const videosHtml = channel.videos.length > 0
                 ? channel.videos.map((v, index) => `
-                    <div class="video-item">
+                    <div class="video-item" draggable="true" 
+                         data-channel-id="${channel.id}" 
+                         data-video-index="${index}"
+                         data-video-filename="${v.filename}">
                         <div class="video-info">
+                            <div class="drag-handle" title="Drag to reorder">⋮⋮</div>
                             <div class="video-index">${index + 1}</div>
                             <div class="video-details">
                                 <div class="video-name">${v.originalName || v.filename}</div>
@@ -730,15 +771,27 @@
             currentUploadChannelId = null;
         }
 
-        // Handle file upload
+        // Handle file upload with progress tracking
         async function handleFileUpload(files) {
             if (files.length === 0 || !currentUploadChannelId) return;
 
             const uploadProgress = document.getElementById('uploadProgress');
             const progressFill = document.getElementById('progressFill');
             const uploadStatus = document.getElementById('uploadStatus');
+            const uploadPercentage = document.getElementById('uploadPercentage');
+            const uploadSpeed = document.getElementById('uploadSpeed');
+            const uploadedSize = document.getElementById('uploadedSize');
+            const totalSize = document.getElementById('totalSize');
 
+            // Show upload progress section
             uploadProgress.style.display = 'block';
+
+            // Initialize progress displays
+            progressFill.style.width = '0%';
+            uploadPercentage.textContent = '0%';
+            uploadSpeed.textContent = 'Starting...';
+            uploadedSize.textContent = '0 MB';
+            totalSize.textContent = '0 MB';
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -746,49 +799,129 @@
                 formData.append('video', file);
                 formData.append('channelId', currentUploadChannelId);
 
+                // Update status and initialize total size
                 uploadStatus.textContent = `Uploading ${file.name} (${i + 1}/${files.length})...`;
-                progressFill.style.width = ((i / files.length) * 100) + '%';
+                totalSize.textContent = formatBytes(file.size);
+                uploadedSize.textContent = '0 MB';
+                progressFill.style.width = '0%';
+                uploadPercentage.textContent = '0%';
+                uploadSpeed.textContent = 'Starting...';
 
-                try {
-                    const response = await fetch(`${API_URL}/upload`, {
+                // Upload with progress tracking
+                const uploadResult = await uploadFileWithProgress(formData, file.size, {
+                    onProgress: (percent, speed, loaded, total) => {
+                        progressFill.style.width = percent + '%';
+                        uploadPercentage.textContent = percent.toFixed(1) + '%';
+                        uploadSpeed.textContent = formatSpeed(speed);
+                        uploadedSize.textContent = formatBytes(loaded);
+                        totalSize.textContent = formatBytes(total);
+                    }
+                });
+
+                if (uploadResult.success) {
+                    // Add video to channel
+                    await fetch(`${API_URL}/channels/${currentUploadChannelId}/videos`, {
                         method: 'POST',
-                        body: formData
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            filename: uploadResult.data.file.filename,
+                            originalName: uploadResult.data.file.originalName,
+                            size: uploadResult.data.file.size
+                        })
                     });
 
-                    const data = await response.json();
-
-                    if (data.success) {
-                        // Add video to channel
-                        await fetch(`${API_URL}/channels/${currentUploadChannelId}/videos`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                filename: data.file.filename,
-                                originalName: data.file.originalName,
-                                size: data.file.size
-                            })
-                        });
-
-                        showToast(`✅ ${file.name} uploaded!`, 'success');
-                    } else {
-                        showToast(`❌ Failed to upload ${file.name}`, 'error');
-                    }
-                } catch (error) {
-                    showToast(`❌ Error uploading ${file.name}`, 'error');
+                    showToast(`✅ ${file.name} uploaded!`, 'success');
+                } else {
+                    showToast(`❌ Failed to upload ${file.name}`, 'error');
                 }
             }
 
-            progressFill.style.width = '100%';
+            // Show completion
             uploadStatus.textContent = 'All uploads complete!';
+            uploadPercentage.textContent = '100%';
+            uploadSpeed.textContent = 'Completed';
+            progressFill.style.width = '100%';
 
             setTimeout(() => {
                 uploadProgress.style.display = 'none';
                 progressFill.style.width = '0%';
+                uploadPercentage.textContent = '0%';
+                uploadSpeed.textContent = '0 MB/s';
+                uploadedSize.textContent = '0 MB';
+                totalSize.textContent = '0 MB';
                 closeUploadModal();
-            }, 1500);
+            }, 2000);
 
+            // Reload channels to show new videos
             await loadChannels();
+
+            // Re-setup drag and drop for new videos
+            setTimeout(() => setupVideoDragDrop(), 500);
         }
+
+        // Upload file with progress tracking using XMLHttpRequest
+        function uploadFileWithProgress(formData, fileSize, callbacks) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                let startTime = Date.now();
+                let lastLoaded = 0;
+                let lastTime = Date.now();
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 100;
+
+                        // Calculate speed
+                        const currentTime = Date.now();
+                        const timeDiff = (currentTime - lastTime) / 1000; // seconds
+                        const loadedDiff = e.loaded - lastLoaded;
+                        const speed = timeDiff > 0 ? loadedDiff / timeDiff : 0; // bytes per second
+
+                        lastLoaded = e.loaded;
+                        lastTime = currentTime;
+
+                        if (callbacks.onProgress) {
+                            callbacks.onProgress(percent, speed, e.loaded, e.total);
+                        }
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 200) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            resolve({ success: true, data: response });
+                        } catch (error) {
+                            resolve({ success: false, error: 'Invalid response' });
+                        }
+                    } else {
+                        resolve({ success: false, error: 'Upload failed' });
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    resolve({ success: false, error: 'Network error' });
+                });
+
+                xhr.addEventListener('abort', () => {
+                    resolve({ success: false, error: 'Upload cancelled' });
+                });
+
+                xhr.open('POST', `${API_URL}/upload`);
+                xhr.send(formData);
+            });
+        }
+
+        // Format speed (bytes per second to human-readable)
+        function formatSpeed(bytesPerSecond) {
+            if (bytesPerSecond === 0) return '0 MB/s';
+            const k = 1024;
+            const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+            const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
+            const value = (bytesPerSecond / Math.pow(k, i)).toFixed(2);
+            return value + ' ' + sizes[i];
+        }
+
 
         // Setup drag and drop
         function setupDragDrop() {
@@ -808,6 +941,110 @@
                 uploadArea.classList.remove('dragging');
                 handleFileUpload(e.dataTransfer.files);
             });
+        }
+
+        // Setup video drag and drop for reordering
+        function setupVideoDragDrop() {
+            const videoItems = document.querySelectorAll('.video-item');
+
+            videoItems.forEach(item => {
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragend', handleDragEnd);
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleDrop);
+                item.addEventListener('dragleave', handleDragLeave);
+            });
+        }
+
+        let draggedElement = null;
+        let draggedChannelId = null;
+        let draggedVideoIndex = null;
+
+        function handleDragStart(e) {
+            draggedElement = e.target;
+            draggedChannelId = parseInt(e.target.dataset.channelId);
+            draggedVideoIndex = parseInt(e.target.dataset.videoIndex);
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            document.querySelectorAll('.video-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+
+            e.preventDefault();
+
+            const targetElement = e.target.closest('.video-item');
+            if (!targetElement || targetElement === draggedElement) return;
+
+            const targetChannelId = parseInt(targetElement.dataset.channelId);
+            const targetVideoIndex = parseInt(targetElement.dataset.videoIndex);
+
+            // Only allow reordering within same channel
+            if (targetChannelId !== draggedChannelId) {
+                showToast('❌ Cannot move videos between channels', 'error');
+                return;
+            }
+
+            // Reorder the videos array
+            reorderVideos(draggedChannelId, draggedVideoIndex, targetVideoIndex);
+
+            return false;
+        }
+
+        function handleDragLeave(e) {
+            e.target.classList.remove('drag-over');
+        }
+
+        // Reorder videos in channel
+        async function reorderVideos(channelId, fromIndex, toIndex) {
+            const channel = allChannels.find(c => c.id === channelId);
+            if (!channel) return;
+
+            // Reorder the array
+            const videos = [...channel.videos];
+            const [movedVideo] = videos.splice(fromIndex, 1);
+            videos.splice(toIndex, 0, movedVideo);
+
+            // Update the channel
+            try {
+                const response = await fetch(`${API_URL}/channels/${channelId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: channel.name,
+                        enabled: channel.enabled,
+                        videos: videos
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast('✅ Video order updated!', 'success');
+                    await loadChannels();
+                    setTimeout(() => setupVideoDragDrop(), 500);
+                } else {
+                    showToast('❌ Failed to update order', 'error');
+                }
+            } catch (error) {
+                showToast('❌ Error: ' + error.message, 'error');
+            }
         }
 
         // Delete video from channel (permanent delete)

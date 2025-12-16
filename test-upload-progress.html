@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Progress Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #1e3c72;
+            margin-bottom: 30px;
+        }
+
+        .upload-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            background: #f9fafb;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #e5e7eb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #10b981);
+            transition: width 0.3s ease;
+        }
+
+        #uploadProgress {
+            margin-top: 20px;
+            display: none;
+            background: #f0f9ff;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #3b82f6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 Upload Progress Test</h1>
+        <p style="color: #6b7280; margin-bottom: 20px;">This is a test page to verify upload progress tracking works
+            correctly.</p>
+
+        <div class="upload-area" onclick="document.getElementById('testFileInput').click()">
+            <p style="font-size: 1.2em; margin-bottom: 10px;">📁 Click to select a file</p>
+            <p style="color: #6b7280;">Any file will work (images, videos, documents)</p>
+            <input type="file" id="testFileInput" style="display: none;" onchange="simulateUpload(this.files[0])">
+        </div>
+
+        <div id="uploadProgress">
+            <p id="uploadStatus" style="font-weight: 600; color: #1e3c72; margin-bottom: 15px; font-size: 1.05em;">
+                Uploading...</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span id="uploadPercentage" style="font-weight: bold; color: #3b82f6; font-size: 1.3em;">0%</span>
+                <span id="uploadSpeed" style="color: #059669; font-weight: 600; font-size: 1.1em;">0 MB/s</span>
+            </div>
+            <div class="progress-bar" style="margin-bottom: 10px;">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #6b7280;">
+                <span><strong>Uploaded:</strong> <span id="uploadedSize">0 MB</span></span>
+                <span><strong>Total:</strong> <span id="totalSize">0 MB</span></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function formatSpeed(bytesPerSecond) {
+            if (bytesPerSecond === 0) return '0 MB/s';
+            const k = 1024;
+            const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+            const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
+            const value = (bytesPerSecond / Math.pow(k, i)).toFixed(2);
+            return value + ' ' + sizes[i];
+        }
+
+        function simulateUpload(file) {
+            if (!file) return;
+
+            const uploadProgress = document.getElementById('uploadProgress');
+            const progressFill = document.getElementById('progressFill');
+            const uploadStatus = document.getElementById('uploadStatus');
+            const uploadPercentage = document.getElementById('uploadPercentage');
+            const uploadSpeed = document.getElementById('uploadSpeed');
+            const uploadedSize = document.getElementById('uploadedSize');
+            const totalSize = document.getElementById('totalSize');
+
+            // Show progress
+            uploadProgress.style.display = 'block';
+            uploadStatus.textContent = `Uploading ${file.name}...`;
+            totalSize.textContent = formatBytes(file.size);
+
+            // Simulate upload progress
+            let progress = 0;
+            const totalBytes = file.size;
+            const uploadDuration = 5000; // 5 seconds simulation
+            const interval = 100; // Update every 100ms
+            const incrementPercentage = (100 / (uploadDuration / interval));
+
+            let lastUpdate = Date.now();
+            let lastBytes = 0;
+
+            const timer = setInterval(() => {
+                progress += incrementPercentage;
+
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(timer);
+
+                    // Show completion
+                    uploadStatus.textContent = 'Upload complete!';
+                    uploadPercentage.textContent = '100%';
+                    uploadSpeed.textContent = 'Completed';
+                    progressFill.style.width = '100%';
+                    uploadedSize.textContent = formatBytes(totalBytes);
+
+                    setTimeout(() => {
+                        uploadProgress.style.display = 'none';
+                        progressFill.style.width = '0%';
+                        uploadPercentage.textContent = '0%';
+                        uploadSpeed.textContent = '0 MB/s';
+                        uploadedSize.textContent = '0 MB';
+                        totalSize.textContent = '0 MB';
+                    }, 3000);
+                    return;
+                }
+
+                // Calculate current bytes uploaded
+                const currentBytes = Math.floor((progress / 100) * totalBytes);
+
+                // Calculate speed
+                const now = Date.now();
+                const timeDiff = (now - lastUpdate) / 1000;
+                const bytesDiff = currentBytes - lastBytes;
+                const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0;
+
+                lastUpdate = now;
+                lastBytes = currentBytes;
+
+                // Update UI
+                uploadPercentage.textContent = progress.toFixed(1) + '%';
+                uploadSpeed.textContent = formatSpeed(speed);
+                progressFill.style.width = progress + '%';
+                uploadedSize.textContent = formatBytes(currentBytes);
+            }, interval);
+        }
+    </script>
+</body>
+
+</html>
