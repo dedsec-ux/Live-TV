@@ -80,13 +80,10 @@
             pointer-events: none;
         }
 
-        .logo-text {
-            color: white;
-            font-family: 'Arial Black', sans-serif;
-            font-size: 20px;
-            letter-spacing: 2px;
-            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-            font-weight: 900;
+        .player-logo img {
+            height: 40px;
+            width: auto;
+            filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
         }
 
         .logo-live-dot {
@@ -495,7 +492,7 @@
                 <div id="player-container-${channel.id}">
                     <div class="player-logo">
                         <div class="logo-live-dot"></div>
-                        <span class="logo-text">IMBV</span>
+                        <img src="INBV MEDIA LOGO ONLY.png" alt="INBV">
                     </div>
                     <video id="player-${channel.id}" class="video-js vjs-default-skin" controls preload="auto" style="display: none;">
                         <source src="${getStreamUrl('hls', channel.id)}" type="application/x-mpegURL">
