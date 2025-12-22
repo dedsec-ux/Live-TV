@@ -568,12 +568,17 @@ async function startChannel(channelId) {
         console.log(`[START-PIPE] Pipe created: ${pipeManager.getPath()}`);
 
 
+        // Ensure HLS directory exists for Nginx
+        const hlsDir = `/var/www/html/hls/live${channelId}`;
+        if (!fs.existsSync(hlsDir)) {
+            fs.mkdirSync(hlsDir, { recursive: true });
+        }
+
         // 2. Start FFmpeg reading from pipe with 1080p RTMP output
         const ffmpegArgs = [
-            '-re',
+            '-thread_queue_size', '1024',
             '-i', pipeManager.getPath(),
-            '-c:v', 'copy',  // Copy video (already encoded by VideoStreamer)
-            '-c:a', 'copy',  // Copy audio (already encoded by VideoStreamer)
+            '-c', 'copy',
             '-f', 'flv',
             `rtmp://localhost/live${channelId}/stream`
         ];
@@ -681,7 +686,8 @@ async function stopChannel(channelId) {
     }
 
     // 4. Clean up HLS files to prevent playback of old content
-    const hlsDir = `/opt/homebrew/var/www/hls/live${channelId}`;
+    // 4. Clean up HLS files for Docker environment
+    const hlsDir = `/var/www/html/hls/live${channelId}`;
     if (fs.existsSync(hlsDir)) {
         try {
             const files = fs.readdirSync(hlsDir);
