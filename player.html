@@ -548,58 +548,72 @@
             `;
         }
 
-        // Get stream URL based on current hostname
+        // Get stream URL based on current host (Handles IPv4, IPv6, and Domains)
         function getStreamUrl(type, channelId) {
-            const hostname = window.location.hostname;
+            const host = window.location.host; // This includes port and handles IPv6 brackets automatically
             const protocol = window.location.protocol;
 
-            // Don't include port for ngrok or domain names, only for localhost/IP addresses
-            const isLocalOrIP = hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
-            const portPart = isLocalOrIP ? ':8080' : '';
-
             if (type === 'hls') {
-                return `${protocol}//${hostname}${portPart}/hls/live${channelId}/stream.m3u8`;
+                return `${protocol}//${host}/hls/live${channelId}/stream.m3u8`;
             } else if (type === 'rtmp') {
+                // RTMP doesn't use the web port, uses 1935
+                const hostname = window.location.hostname;
                 return `rtmp://${hostname}/live${channelId}/stream`;
             }
         }
 
         // Copy to clipboard function
-        // Copy embed code to clipboard
+        function copyText(text) {
+            // Modern Clipboard API (Requires HTTPS)
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => showCopyToast()).catch(() => fallbackCopy(text));
+            } else {
+                // Fallback for HTTP/IP access
+                fallbackCopy(text);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+
+            // Ensure textArea is not visible and doesn't cause scroll
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            textArea.setSelectionRange(0, 99999); // For mobile
+
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopyToast();
+                } else {
+                    console.error('Fallback copy was unsuccessful');
+                    alert('Could not copy automatically. Please copy manually.');
+                }
+            } catch (err) {
+                console.error('Fallback copy failed', err);
+                alert('Could not copy automatically. Please copy manually.');
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function showCopyToast() {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 15px 25px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; font-weight: bold;';
+            toast.textContent = '✅ Copied to clipboard!';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+
         function copyEmbedCode(channelId) {
             const baseUrl = window.location.origin;
             const embedCode = `<iframe src="${baseUrl}/embed.html?channel=${channelId}&autoplay=1&muted=1" width="100%" height="600" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
-
-            navigator.clipboard.writeText(embedCode).then(() => {
-                const toast = document.createElement('div');
-                toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: white; color: #667eea; padding: 15px 25px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; font-weight: bold;';
-                toast.textContent = '✅ Embed code copied to clipboard!';
-                document.body.appendChild(toast);
-
-                setTimeout(() => {
-                    toast.remove();
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-                alert('Failed to copy embed code');
-            });
-        }
-
-        function copyText(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                // Create a temporary toast notification
-                const toast = document.createElement('div');
-                toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: white; color: #667eea; padding: 15px 25px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; font-weight: bold;';
-                toast.textContent = '✅ Copied to clipboard!';
-                document.body.appendChild(toast);
-
-                setTimeout(() => {
-                    toast.remove();
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-                alert('Failed to copy to clipboard');
-            });
+            copyText(embedCode);
         }
 
         // Initialize on page load

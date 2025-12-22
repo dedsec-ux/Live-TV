@@ -86,8 +86,9 @@
 
     <script>
         const channelId = 1;
-        const baseUrl = window.location.origin;
-        const streamUrl = `${baseUrl}/hls/live${channelId}/stream.m3u8`;
+        const host = window.location.host;
+        const protocol = window.location.protocol;
+        const streamUrl = `${protocol}//${host}/hls/live${channelId}/stream.m3u8`;
 
         document.getElementById('streamUrl').textContent = streamUrl;
         document.getElementById('videoSource').src = streamUrl;
@@ -110,7 +111,7 @@
         player.on('error', function () {
             const error = player.error();
             console.error('Player error:', error);
-            alert('Stream error: ' + (error ? error.message : 'Unknown error'));
+            // Don't alert on standard loading delays
         });
 
         // Success
@@ -129,17 +130,20 @@
                 type: 'application/x-mpegURL'
             });
             player.load();
-            player.play();
+            player.play().catch(e => console.log('Manual play failed:', e));
         }
 
-        // Fetch channel info
-        fetch(`${baseUrl.replace(':8080', ':3000')}/api/channels`)
+        // Fetch channel info - use relative API path
+        fetch('/api/channels')
             .then(r => r.json())
             .then(data => {
-                if (data.success && data.channels[0]) {
-                    const videoCount = data.channels[0].videos.length;
-                    document.getElementById('videoCount').textContent =
-                        `Videos in playlist: ${videoCount} (${data.channels[0].videos.map(v => v.originalName || v.filename).join(', ')})`;
+                if (data.success && data.channels) {
+                    const channel = data.channels.find(c => c.id === channelId);
+                    if (channel) {
+                        const videoCount = channel.videos.length;
+                        document.getElementById('videoCount').textContent =
+                            `Videos in playlist: ${videoCount} (${channel.videos.map(v => v.originalName || v.filename).join(', ')})`;
+                    }
                 }
             })
             .catch(e => console.error('Error fetching channel info:', e));
