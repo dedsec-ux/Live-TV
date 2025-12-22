@@ -574,52 +574,8 @@ async function startChannel(channelId) {
             fs.mkdirSync(hlsDir, { recursive: true });
         }
 
-        // 2. Start FFmpeg pusher (reads from pipe, sends to RTMP)
-        const ffmpegArgs = [
-            '-i', pipeManager.getPath(),
-            '-c', 'copy',
-            '-f', 'flv',
-            `rtmp://localhost/live${channelId}/stream`
-        ];
-
-        const logStream = fs.createWriteStream(logPath, { flags: 'a' });
-        const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-
-        console.log(`[START-PIPE] FFmpeg spawned with PID: ${ffmpeg.pid}`);
-
-        ffmpeg.stdout.pipe(logStream);
-        ffmpeg.stderr.pipe(logStream);
-
-        // Save PID
-        fs.writeFileSync(pidPath, ffmpeg.pid.toString());
-        activeFfmpeg.set(channelId, ffmpeg);
-
-        ffmpeg.on('error', (error) => {
-            console.error(`[START-PIPE] FFmpeg ERROR:`, error);
-        });
-
-        ffmpeg.on('exit', async (code) => {
-            console.log(`[START-PIPE] FFmpeg exited with code: ${code}`);
-            if (fs.existsSync(pidPath)) {
-                fs.unlinkSync(pidPath);
-            }
-            activeFfmpeg.delete(channelId);
-
-            // Stop VideoStreamer to prevent writing to dead pipe
-            const streamer = activeStreamers.get(channelId);
-            if (streamer) {
-                console.log(`[START-PIPE] Stopping VideoStreamer due to FFmpeg exit`);
-                streamer.stop();
-                activeStreamers.delete(channelId);
-            }
-
-            // Clean up pipe if FFmpeg dies
-            const pipe = activePipes.get(channelId);
-            if (pipe) {
-                await pipe.destroy();
-                activePipes.delete(channelId);
-            }
-        });
+        // 2 & 3. Modularized restartable pusher
+        startPusher(channelId);
 
         // 3. Start VideoStreamer (streams videos to pipe)
         const videoStreamer = new VideoStreamer(channelId, pipeManager, playlistPath, VIDEOS_DIR);
@@ -635,6 +591,60 @@ async function startChannel(channelId) {
         console.error(`[START-PIPE] Error starting channel ${channelId}:`, error);
         throw error;
     }
+}
+
+/**
+ * Separated Pusher logic for persistence
+ */
+async function startPusher(channelId) {
+    const pipeManager = activePipes.get(channelId);
+    if (!pipeManager) return;
+
+    const pidPath = path.join(PIDS_DIR, `live${channelId}.pid`);
+    const logPath = path.join(LOGS_DIR, `live${channelId}.log`);
+
+    const ffmpegArgs = [
+        '-thread_queue_size', '1024',
+        '-f', 'flv',
+        '-i', pipeManager.getPath(),
+        '-c', 'copy',
+        '-f', 'flv',
+        `rtmp://localhost/live${channelId}/stream`
+    ];
+
+    const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+
+    console.log(`[PUSHER] Channel ${channelId} spawned with PID: ${ffmpeg.pid}`);
+    ffmpeg.stdout.pipe(logStream);
+    ffmpeg.stderr.pipe(logStream);
+
+    fs.writeFileSync(pidPath, ffmpeg.pid.toString());
+    activeFfmpeg.set(channelId, ffmpeg);
+
+    ffmpeg.on('error', (error) => {
+        console.error(`[PUSHER] FFmpeg ERROR:`, error);
+    });
+
+    ffmpeg.on('exit', async (code) => {
+        console.log(`[PUSHER] FFmpeg exited with code: ${code}`);
+        if (fs.existsSync(pidPath)) fs.unlinkSync(pidPath);
+        activeFfmpeg.delete(channelId);
+
+        const streamer = activeStreamers.get(channelId);
+        if (streamer && streamer.isStreaming) {
+            console.log(`[PUSHER] Streamer active, auto-restarting in 2s...`);
+            setTimeout(() => {
+                if (activeStreamers.has(channelId)) startPusher(channelId);
+            }, 2000);
+        } else {
+            const pipe = activePipes.get(channelId);
+            if (pipe) {
+                await pipe.destroy();
+                activePipes.delete(channelId);
+            }
+        }
+    });
 }
 
 
