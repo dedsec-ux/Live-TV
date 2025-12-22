@@ -576,9 +576,9 @@ async function startChannel(channelId) {
 
         // 2. Start FFmpeg reading from pipe with 1080p RTMP output
         const ffmpegArgs = [
-            '-thread_queue_size', '1024',
+            '-re',                           // Read input at real-time rate
             '-i', pipeManager.getPath(),
-            '-c', 'copy',
+            '-c', 'copy',                    // Bitstream copy (no re-encoding needed here)
             '-f', 'flv',
             `rtmp://localhost/live${channelId}/stream`
         ];
