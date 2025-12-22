@@ -604,35 +604,76 @@ async function startPusher(channelId) {
     const logPath = path.join(LOGS_DIR, `live${channelId}.log`);
 
     const ffmpegArgs = [
-        '-thread_queue_size', '4096',    // Much larger queue to absorb any streamer jitters
+        '-thread_queue_size', '2048',        // Reduced queue size to prevent memory bloat
         '-re',
         '-use_wallclock_as_timestamps', '1',
         '-fflags', '+genpts+igndts',
         '-avoid_negative_ts', 'make_zero',
         '-f', 'mpegts',
         '-i', pipeManager.getPath(),
+        '-threads', '2',                      // Limit CPU cores
         '-c', 'copy',
         '-f', 'flv',
         '-flvflags', 'no_duration_filesize',
+        '-max_muxing_queue_size', '1024',    // Limit muxing queue to prevent memory bloat
         `rtmp://localhost/live${channelId}/stream`
     ];
 
     const logStream = fs.createWriteStream(logPath, { flags: 'a' });
-    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+    
+    // Spawn with resource limits
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs, {
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
 
     console.log(`[PUSHER] Channel ${channelId} spawned with PID: ${ffmpeg.pid}`);
-    ffmpeg.stdout.pipe(logStream);
-    ffmpeg.stderr.pipe(logStream);
+    
+    // Limit log stream writes to prevent memory issues
+    let logBuffer = [];
+    let lastLogFlush = Date.now();
+    
+    const flushLogs = () => {
+        if (logBuffer.length > 0) {
+            logStream.write(logBuffer.join(''));
+            logBuffer = [];
+            lastLogFlush = Date.now();
+        }
+    };
+    
+    ffmpeg.stdout.on('data', (data) => {
+        logBuffer.push(data.toString());
+        if (logBuffer.length > 100 || (Date.now() - lastLogFlush > 5000)) {
+            flushLogs();
+        }
+    });
+    
+    ffmpeg.stderr.on('data', (data) => {
+        logBuffer.push(data.toString());
+        if (logBuffer.length > 100 || (Date.now() - lastLogFlush > 5000)) {
+            flushLogs();
+        }
+    });
 
     fs.writeFileSync(pidPath, ffmpeg.pid.toString());
     activeFfmpeg.set(channelId, ffmpeg);
 
     ffmpeg.on('error', (error) => {
         console.error(`[PUSHER] FFmpeg ERROR:`, error);
+        flushLogs();
     });
 
     ffmpeg.on('exit', async (code) => {
         console.log(`[PUSHER] FFmpeg exited with code: ${code}`);
+        flushLogs();
+        
+        // Clean up event listeners
+        ffmpeg.stdout.removeAllListeners();
+        ffmpeg.stderr.removeAllListeners();
+        ffmpeg.removeAllListeners();
+        
+        // Close log stream
+        logStream.end();
+        
         if (fs.existsSync(pidPath)) fs.unlinkSync(pidPath);
         activeFfmpeg.delete(channelId);
 
@@ -733,6 +774,142 @@ function getChannelStatus(channelId) {
     }
     return { running: false };
 }
+
+// ===== PERIODIC CLEANUP & MONITORING =====
+
+/**
+ * Cleanup old HLS segments to prevent disk accumulation
+ * Runs every 5 minutes
+ */
+function cleanupOldHLSSegments() {
+    console.log('[CLEANUP] Running HLS segment cleanup...');
+    
+    const hlsBaseDir = '/var/www/html/hls';
+    
+    // Fallback for macOS development
+    if (!fs.existsSync(hlsBaseDir)) {
+        console.log('[CLEANUP] Docker HLS path not found, skipping...');
+        return;
+    }
+    
+    try {
+        // Get all live channel directories
+        const channelDirs = fs.readdirSync(hlsBaseDir)
+            .filter(dir => dir.startsWith('live'))
+            .map(dir => path.join(hlsBaseDir, dir));
+        
+        let totalCleaned = 0;
+        
+        channelDirs.forEach(channelDir => {
+            if (!fs.existsSync(channelDir)) return;
+            
+            const files = fs.readdirSync(channelDir);
+            const now = Date.now();
+            const maxAge = 5 * 60 * 1000; // 5 minutes
+            
+            files.forEach(file => {
+                if (!file.endsWith('.ts')) return; // Only cleanup .ts segments
+                
+                const filePath = path.join(channelDir, file);
+                try {
+                    const stats = fs.statSync(filePath);
+                    const age = now - stats.mtimeMs;
+                    
+                    // Delete segments older than 5 minutes
+                    if (age > maxAge) {
+                        fs.unlinkSync(filePath);
+                        totalCleaned++;
+                    }
+                } catch (err) {
+                    // File might have been deleted already
+                }
+            });
+        });
+        
+        if (totalCleaned > 0) {
+            console.log(`[CLEANUP] Removed ${totalCleaned} old HLS segments`);
+        }
+    } catch (error) {
+        console.error('[CLEANUP] Error during HLS cleanup:', error.message);
+    }
+}
+
+/**
+ * Monitor and cleanup zombie FFmpeg processes
+ */
+function cleanupZombieProcesses() {
+    try {
+        exec('ps aux | grep ffmpeg | grep -v grep', (error, stdout) => {
+            if (error) return; // No processes found
+            
+            const lines = stdout.trim().split('\n');
+            const runningPids = new Set();
+            
+            lines.forEach(line => {
+                const parts = line.trim().split(/\s+/);
+                if (parts.length > 1) {
+                    runningPids.add(parseInt(parts[1]));
+                }
+            });
+            
+            // Check our tracked FFmpeg processes
+            activeFfmpeg.forEach((ffmpegProcess, channelId) => {
+                if (ffmpegProcess && ffmpegProcess.pid) {
+                    if (!runningPids.has(ffmpegProcess.pid)) {
+                        console.log(`[CLEANUP] Zombie process detected for channel ${channelId}, cleaning up...`);
+                        activeFfmpeg.delete(channelId);
+                    }
+                }
+            });
+        });
+    } catch (error) {
+        console.error('[CLEANUP] Error checking zombie processes:', error.message);
+    }
+}
+
+// Run cleanup every 5 minutes
+setInterval(cleanupOldHLSSegments, 5 * 60 * 1000);
+setInterval(cleanupZombieProcesses, 2 * 60 * 1000); // Every 2 minutes
+
+// Run initial cleanup after 30 seconds
+setTimeout(cleanupOldHLSSegments, 30000);
+
+console.log('[CLEANUP] Periodic cleanup tasks scheduled');
+
+// Graceful shutdown handler
+process.on('SIGTERM', async () => {
+    console.log('\n[SHUTDOWN] Received SIGTERM, shutting down gracefully...');
+    
+    // Stop all streamers
+    for (const [channelId, streamer] of activeStreamers) {
+        console.log(`[SHUTDOWN] Stopping streamer ${channelId}...`);
+        streamer.stop();
+    }
+    
+    // Stop all FFmpeg processes
+    for (const [channelId, ffmpeg] of activeFfmpeg) {
+        console.log(`[SHUTDOWN] Stopping FFmpeg ${channelId}...`);
+        try {
+            ffmpeg.kill('SIGTERM');
+        } catch (err) {
+            // Already stopped
+        }
+    }
+    
+    // Destroy all pipes
+    for (const [channelId, pipe] of activePipes) {
+        console.log(`[SHUTDOWN] Destroying pipe ${channelId}...`);
+        await pipe.destroy();
+    }
+    
+    console.log('[SHUTDOWN] Cleanup complete, exiting...');
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('\n[SHUTDOWN] Received SIGINT, shutting down gracefully...');
+    process.emit('SIGTERM');
+});
 
 // Start server
 app.listen(PORT, () => {
