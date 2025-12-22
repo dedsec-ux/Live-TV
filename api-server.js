@@ -67,11 +67,12 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage: storage,
     fileFilter: (req, file, cb) => {
-        const allowedTypes = /mp4|avi|mov|mkv|flv/;
+        // Support all common video formats
+        const allowedTypes = /mp4|avi|mov|mkv|flv|webm|wmv|m4v|3gp|asf|ogv/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
+        const mimetype = file.mimetype.startsWith('video/');
 
-        if (mimetype && extname) {
+        if (mimetype || extname) {
             return cb(null, true);
         } else {
             cb(new Error('Only video files are allowed!'));
