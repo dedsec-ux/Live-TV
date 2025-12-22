@@ -604,18 +604,19 @@ async function startPusher(channelId) {
     const logPath = path.join(LOGS_DIR, `live${channelId}.log`);
 
     const ffmpegArgs = [
-        '-thread_queue_size', '2048',        // Reduced queue size to prevent memory bloat
+        '-thread_queue_size', '1024',        // Further reduced queue size
         '-re',
         '-use_wallclock_as_timestamps', '1',
         '-fflags', '+genpts+igndts',
         '-avoid_negative_ts', 'make_zero',
         '-f', 'mpegts',
         '-i', pipeManager.getPath(),
-        '-threads', '2',                      // Limit CPU cores
+        '-threads', '1',                      // Only 1 core for copy operation
         '-c', 'copy',
         '-f', 'flv',
         '-flvflags', 'no_duration_filesize',
-        '-max_muxing_queue_size', '1024',    // Limit muxing queue to prevent memory bloat
+        '-max_muxing_queue_size', '512',     // Further reduced muxing queue
+        '-rtmp_buffer', '1000',              // Limit RTMP buffer
         `rtmp://localhost/live${channelId}/stream`
     ];
 
