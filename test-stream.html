@@ -86,9 +86,14 @@
 
     <script>
         const channelId = 1;
-        const host = window.location.host;
+        const hostname = window.location.hostname;
         const protocol = window.location.protocol;
-        const streamUrl = `${protocol}//${host}/hls/live${channelId}/stream.m3u8`;
+
+        const isIP = /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(':');
+        const isLocal = hostname === 'localhost';
+        const portPart = (isIP || isLocal) ? ':8080' : '';
+
+        const streamUrl = `${protocol}//${hostname}${portPart}/hls/live${channelId}/stream.m3u8`;
 
         document.getElementById('streamUrl').textContent = streamUrl;
         document.getElementById('videoSource').src = streamUrl;

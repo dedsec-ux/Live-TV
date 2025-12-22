@@ -574,11 +574,10 @@ async function startChannel(channelId) {
             fs.mkdirSync(hlsDir, { recursive: true });
         }
 
-        // 2. Start FFmpeg reading from pipe with 1080p RTMP output
+        // 2. Start FFmpeg pusher (reads from pipe, sends to RTMP)
         const ffmpegArgs = [
-            '-re',                           // Read input at real-time rate
             '-i', pipeManager.getPath(),
-            '-c', 'copy',                    // Bitstream copy (no re-encoding needed here)
+            '-c', 'copy',
             '-f', 'flv',
             `rtmp://localhost/live${channelId}/stream`
         ];

@@ -548,16 +548,21 @@
             `;
         }
 
-        // Get stream URL based on current host (Handles IPv4, IPv6, and Domains)
+        // Get stream URL based on current host
         function getStreamUrl(type, channelId) {
-            const host = window.location.host; // This includes port and handles IPv6 brackets automatically
+            const hostname = window.location.hostname;
             const protocol = window.location.protocol;
 
+            // Check if we are on an IP address (v4 or v6)
+            const isIP = /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(':');
+            const isLocal = hostname === 'localhost';
+
+            // Use 8080 for direct IP/local access as originally working
+            const portPart = (isIP || isLocal) ? ':8080' : '';
+
             if (type === 'hls') {
-                return `${protocol}//${host}/hls/live${channelId}/stream.m3u8`;
+                return `${protocol}//${hostname}${portPart}/hls/live${channelId}/stream.m3u8`;
             } else if (type === 'rtmp') {
-                // RTMP doesn't use the web port, uses 1935
-                const hostname = window.location.hostname;
                 return `rtmp://${hostname}/live${channelId}/stream`;
             }
         }
