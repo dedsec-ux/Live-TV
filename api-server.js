@@ -605,11 +605,14 @@ async function startPusher(channelId) {
 
     const ffmpegArgs = [
         '-re',                           // Synchronize with pipe
-        '-fflags', '+genpts+igndts',     // Normalize timestamps
-        '-f', 'mpegts',                 // Input is now MPEG-TS
+        '-use_wallclock_as_timestamps', '1', // FORCE server-time based timestamps
+        '-fflags', '+genpts+igndts',     // Normalize incoming packets
+        '-avoid_negative_ts', 'make_zero',
+        '-f', 'mpegts',
         '-i', pipeManager.getPath(),
         '-c', 'copy',
         '-f', 'flv',
+        '-flvflags', 'no_duration_filesize',
         `rtmp://localhost/live${channelId}/stream`
     ];
 
