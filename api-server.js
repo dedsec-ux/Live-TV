@@ -604,8 +604,9 @@ async function startPusher(channelId) {
     const logPath = path.join(LOGS_DIR, `live${channelId}.log`);
 
     const ffmpegArgs = [
-        '-thread_queue_size', '1024',
-        '-f', 'flv',
+        '-re',                           // Synchronize with pipe
+        '-fflags', '+genpts+igndts',     // Normalize timestamps
+        '-f', 'mpegts',                 // Input is now MPEG-TS
         '-i', pipeManager.getPath(),
         '-c', 'copy',
         '-f', 'flv',
