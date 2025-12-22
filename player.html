@@ -415,30 +415,22 @@
                         console.log(`[Player ${channel.id}] Error:`, error);
 
                         if (retryCount < maxRetries) {
-                            // Exponential backoff: 2s, 4s, 8s, 16s, 32s (max)
-                            const delay = Math.min(baseDelay * Math.pow(2, retryCount), 32000);
+                            const isCorruption = error && (error.code === 3 || error.code === 4);
+                            const delay = isCorruption ? 1000 : Math.min(baseDelay * Math.pow(2, retryCount), 32000);
                             retryCount++;
 
                             console.log(`[Player ${channel.id}] Retrying in ${delay / 1000}s... (attempt ${retryCount}/${maxRetries})`);
 
-                            // Show retry message
-                            const errorDisplay = player.errorDisplay;
-                            if (errorDisplay) {
-                                errorDisplay.contentEl().innerHTML = `
-                                    <div style="text-align: center; padding: 20px;">
-                                        <div style="font-size: 1.2em; margin-bottom: 10px;">🔄 Connection Lost</div>
-                                        <div>Retrying in ${delay / 1000} seconds...</div>
-                                        <div style="font-size: 0.9em; margin-top: 10px; opacity: 0.8;">Attempt ${retryCount}/${maxRetries}</div>
-                                    </div>
-                                `;
-                            }
-
                             setTimeout(() => {
-                                console.log(`[Player ${channel.id}] Reloading stream...`);
-                                player.src({
-                                    src: getStreamUrl('hls', channel.id),
-                                    type: 'application/x-mpegURL'
-                                });
+                                const streamUrl = getStreamUrl('hls', channel.id);
+                                if (isCorruption && retryCount > 2) {
+                                    player.src({
+                                        src: streamUrl + '?t=' + new Date().getTime(),
+                                        type: 'application/x-mpegURL'
+                                    });
+                                } else {
+                                    player.src({ src: streamUrl, type: 'application/x-mpegURL' });
+                                }
                                 player.load();
                                 player.play().catch(e => console.log('Autoplay prevented:', e));
                             }, delay);

@@ -142,20 +142,30 @@
             const error = player.error();
             console.error('Stream error:', error);
 
+            // Handle corruption/decode errors specifically
+            const isCorruption = error && (error.code === 3 || error.code === 4);
+
             if (retryCount < maxRetries) {
                 retryCount++;
-                console.log(`Retrying... (${retryCount}/${maxRetries})`);
+                const delay = isCorruption ? 1000 : (2000 * retryCount);
+                console.log(`Retrying... (${retryCount}/${maxRetries}) - ${isCorruption ? 'Fixing Corruption' : 'Reconnecting'}`);
 
                 setTimeout(() => {
-                    player.src({
-                        src: streamUrl,
-                        type: 'application/x-mpegURL'
-                    });
+                    if (isCorruption && retryCount > 2) {
+                        // If it keeps failing, refresh the whole stream link
+                        console.log('Performing hard stream reset...');
+                        player.src({
+                            src: streamUrl + '?t=' + new Date().getTime(),
+                            type: 'application/x-mpegURL'
+                        });
+                    } else {
+                        player.src({ src: streamUrl, type: 'application/x-mpegURL' });
+                    }
                     player.load();
                     if (autoplay) {
                         player.play().catch(e => console.log('Autoplay prevented'));
                     }
-                }, 2000 * retryCount);
+                }, delay);
             }
         });
 
