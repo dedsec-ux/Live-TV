@@ -1189,8 +1189,8 @@
             const totalVideos = allChannels.reduce((sum, ch) => sum + (ch.videos?.length || 0), 0);
             document.getElementById('total-videos').textContent = totalVideos;
 
-            // Updated for 1080p bandwidth (5.2 Mbps per stream)
-            document.getElementById('total-bandwidth').textContent = (runningCount * 5.2).toFixed(1) + ' Mbps';
+            // Updated for high-quality bandwidth (7 Mbps per stream)
+            document.getElementById('total-bandwidth').textContent = (runningCount * 7).toFixed(1) + ' Mbps';
         }
 
         // Refresh all

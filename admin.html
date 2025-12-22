@@ -748,7 +748,7 @@
             const totalVideos = allChannels.reduce((sum, ch) => sum + (ch.videos?.length || 0), 0);
             document.getElementById('total-videos').textContent = totalVideos;
 
-            document.getElementById('total-bandwidth').textContent = (runningCount * 3) + ' Mbps';
+            document.getElementById('total-bandwidth').textContent = (runningCount * 7) + ' Mbps';
         }
 
         // Handle file upload
