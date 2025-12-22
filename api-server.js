@@ -844,13 +844,18 @@ function cleanupZombieProcesses() {
             
             const lines = stdout.trim().split('\n');
             const runningPids = new Set();
+            const orphanedPids = [];
             
             lines.forEach(line => {
                 const parts = line.trim().split(/\s+/);
                 if (parts.length > 1) {
-                    runningPids.add(parseInt(parts[1]));
+                    const pid = parseInt(parts[1]);
+                    runningPids.add(pid);
                 }
             });
+            
+            // Count FFmpeg processes per channel
+            const processCountPerChannel = new Map();
             
             // Check our tracked FFmpeg processes
             activeFfmpeg.forEach((ffmpegProcess, channelId) => {
@@ -858,23 +863,88 @@ function cleanupZombieProcesses() {
                     if (!runningPids.has(ffmpegProcess.pid)) {
                         console.log(`[CLEANUP] Zombie process detected for channel ${channelId}, cleaning up...`);
                         activeFfmpeg.delete(channelId);
+                    } else {
+                        processCountPerChannel.set(channelId, (processCountPerChannel.get(channelId) || 0) + 1);
                     }
                 }
             });
+            
+            // If total FFmpeg processes exceed expected count, kill orphans
+            const expectedCount = activeStreamers.size + activeFfmpeg.size;
+            if (runningPids.size > expectedCount * 3) {
+                console.warn(`[CLEANUP] Too many FFmpeg processes detected (${runningPids.size}), investigating...`);
+                
+                // Kill FFmpeg processes that aren't in our tracking
+                runningPids.forEach(pid => {
+                    let isTracked = false;
+                    activeFfmpeg.forEach(proc => {
+                        if (proc && proc.pid === pid) isTracked = true;
+                    });
+                    
+                    if (!isTracked) {
+                        console.warn(`[CLEANUP] Killing orphaned FFmpeg process PID: ${pid}`);
+                        try {
+                            process.kill(pid, 'SIGKILL');
+                        } catch (err) {
+                            // Process might have already exited
+                        }
+                    }
+                });
+            }
         });
     } catch (error) {
         console.error('[CLEANUP] Error checking zombie processes:', error.message);
     }
 }
 
+/**
+ * Aggressive process limiter - ensures no channel has more than 2 FFmpeg processes
+ */
+function enforceProcessLimits() {
+    try {
+        exec('ps aux | grep "ffmpeg.*live" | grep -v grep | wc -l', (error, stdout) => {
+            if (error) return;
+            
+            const processCount = parseInt(stdout.trim());
+            const activeChannels = activeStreamers.size;
+            const expectedProcesses = activeChannels * 2; // 2 per channel (streamer + pusher)
+            
+            if (processCount > expectedProcesses * 2) {
+                console.error(`[CLEANUP] ⚠️ Process leak detected! Found ${processCount} FFmpeg processes, expected ~${expectedProcesses}`);
+                console.error(`[CLEANUP] Active channels: ${activeChannels}`);
+                
+                // Force restart all channels to clean up
+                console.log('[CLEANUP] Force restarting all channels to clean up processes...');
+                
+                const channelIds = Array.from(activeStreamers.keys());
+                channelIds.forEach(async (channelId) => {
+                    console.log(`[CLEANUP] Restarting channel ${channelId}...`);
+                    await stopChannel(channelId);
+                    setTimeout(() => {
+                        startChannel(channelId).catch(err => {
+                            console.error(`[CLEANUP] Error restarting channel ${channelId}:`, err);
+                        });
+                    }, 2000);
+                });
+            }
+        });
+    } catch (error) {
+        console.error('[CLEANUP] Error enforcing process limits:', error.message);
+    }
+}
+
 // Run cleanup every 5 minutes
 setInterval(cleanupOldHLSSegments, 5 * 60 * 1000);
 setInterval(cleanupZombieProcesses, 2 * 60 * 1000); // Every 2 minutes
+setInterval(enforceProcessLimits, 5 * 60 * 1000);   // Every 5 minutes - aggressive check
 
 // Run initial cleanup after 30 seconds
 setTimeout(cleanupOldHLSSegments, 30000);
+setTimeout(enforceProcessLimits, 60000); // Check after 1 minute
 
 console.log('[CLEANUP] Periodic cleanup tasks scheduled');
+console.log('[CLEANUP] Process monitoring: Every 2 minutes');
+console.log('[CLEANUP] Aggressive limiter: Every 5 minutes');
 
 // Graceful shutdown handler
 process.on('SIGTERM', async () => {
