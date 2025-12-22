@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Streaming Data (Large Files)
+videos/
+hls/
+playlists/*.txt
+
+# Logs and Process IDs
+logs/
+pids/
+
+# OS files
+.DS_Store
+*.zip
+*.tar.gz
