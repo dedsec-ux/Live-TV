@@ -604,9 +604,10 @@ async function startPusher(channelId) {
     const logPath = path.join(LOGS_DIR, `live${channelId}.log`);
 
     const ffmpegArgs = [
-        '-re',                           // Synchronize with pipe
-        '-use_wallclock_as_timestamps', '1', // FORCE server-time based timestamps
-        '-fflags', '+genpts+igndts',     // Normalize incoming packets
+        '-thread_queue_size', '4096',    // Much larger queue to absorb any streamer jitters
+        '-re',
+        '-use_wallclock_as_timestamps', '1',
+        '-fflags', '+genpts+igndts',
         '-avoid_negative_ts', 'make_zero',
         '-f', 'mpegts',
         '-i', pipeManager.getPath(),
