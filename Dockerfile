@@ -65,8 +65,9 @@ RUN mkdir -p videos/{channel1,channel2,channel3,channel4,channel5,channel6,chann
     && mkdir -p playlists pids logs lib \
     && chmod -R 755 videos playlists pids logs lib
 
-# Copy HTML files to nginx directory
-RUN cp *.html /var/www/html/ 2>/dev/null || true
+# Copy HTML and Logo files to nginx directory
+RUN cp *.html /var/www/html/ 2>/dev/null || true && \
+    cp *.png /var/www/html/ 2>/dev/null || true
 
 # Copy nginx config
 COPY docker/nginx.conf /etc/nginx/nginx.conf
