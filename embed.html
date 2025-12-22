@@ -33,10 +33,67 @@
         .vjs-big-play-button {
             display: none !important;
         }
+
+        /* Hide the 'Line' (Progress Control) */
+        .vjs-progress-control {
+            display: none !important;
+        }
+
+        /* Premium Logo Styling */
+        .player-logo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .logo-text {
+            color: white;
+            font-family: 'Arial Black', sans-serif;
+            font-size: 24px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            font-weight: 900;
+        }
+
+        .logo-live-dot {
+            width: 10px;
+            height: 10px;
+            background: #ff4757;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #ff4757;
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7);
+            }
+
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 10px rgba(255, 71, 87, 0);
+            }
+
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(255, 71, 87, 0);
+            }
+        }
     </style>
 </head>
 
 <body>
+    <div class="player-logo">
+        <div class="logo-live-dot"></div>
+        <span class="logo-text">IMBV</span>
+    </div>
     <video id="embed-player" class="video-js vjs-default-skin" controls autoplay muted playsinline></video>
 
     <script>

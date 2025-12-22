@@ -64,6 +64,57 @@
             margin-bottom: 40px;
         }
 
+        /* Hide the 'Line' (Progress Control) */
+        .vjs-progress-control {
+            display: none !important;
+        }
+
+        .player-logo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .logo-text {
+            color: white;
+            font-family: 'Arial Black', sans-serif;
+            font-size: 20px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            font-weight: 900;
+        }
+
+        .logo-live-dot {
+            width: 8px;
+            height: 8px;
+            background: #ff4757;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #ff4757;
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
         .channel-card {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 15px;
@@ -261,7 +312,7 @@
         <header>
             <h1>🎬 INBV VOD-to-Live Streaming</h1>
             <p class="subtitle">Multi-Channel Live Streaming System</p>
-            <div class="status" id="systemStatus">� Loading...</div>
+            <div class="status" id="systemStatus"> Loading...</div>
         </header>
 
         <div id="loadingMessage" class="loading">Loading channels...</div>
@@ -442,6 +493,10 @@
                     <div class="live-badge offline" id="badge-${channel.id}">⏹️ Offline</div>
                 </div>
                 <div id="player-container-${channel.id}">
+                    <div class="player-logo">
+                        <div class="logo-live-dot"></div>
+                        <span class="logo-text">IMBV</span>
+                    </div>
                     <video id="player-${channel.id}" class="video-js vjs-default-skin" controls preload="auto" style="display: none;">
                         <source src="${getStreamUrl('hls', channel.id)}" type="application/x-mpegURL">
                     </video>
