@@ -17,6 +17,12 @@
 
 ## ✅ Fixes Applied
 
+### NEW: Reduce PIDs per channel (Dec 23, 2025)
+- Added a direct FFmpeg-to-RTMP mode that removes the extra pusher process.
+- Set environment variable `STREAM_MODE=rtmp` to enable.
+- Result: ~1 FFmpeg process per active channel (instead of ~2).
+- To keep the original named-pipe architecture, use `STREAM_MODE=pipe`.
+
 ### 1. **nginx Configuration** (Both files)
 - Added `hls_cleanup on;` to all 10 channels (live1-live10)
 - Files: `nginx.conf` and `docker/nginx.conf`
@@ -152,7 +158,9 @@ docker stats inbv-streaming-server
 docker exec -it inbv-streaming-server ps aux | grep ffmpeg | wc -l
 ```
 
-**Expected:** 2 per active channel (e.g., 3 channels = 6 processes)
+**Expected:**
+- When `STREAM_MODE=rtmp` (direct): ~1 per active channel
+- When `STREAM_MODE=pipe` (pipe+pusher): ~2 per active channel
 
 ### Check HLS Cleanup:
 ```bash

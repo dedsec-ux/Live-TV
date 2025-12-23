@@ -12,6 +12,7 @@ const VideoStreamer = require('./lib/video-streamer');
 
 const app = express();
 const PORT = 3000;
+const STREAM_MODE = process.env.STREAM_MODE === 'rtmp' ? 'rtmp' : (process.env.STREAM_MODE === 'pipe' ? 'pipe' : 'rtmp');
 
 // Paths
 const BASE_DIR = __dirname;
@@ -549,6 +550,13 @@ async function startChannel(channelId) {
         throw new Error('Channel has no videos');
     }
 
+    // Check if already running
+    const status = getChannelStatus(channelId);
+    if (status.running) {
+        console.log(`[START] Channel ${channelId} already running, skipping...`);
+        return;
+    }
+
     // Generate playlist
     generatePlaylist(channelId);
 
@@ -556,36 +564,40 @@ async function startChannel(channelId) {
     const logPath = path.join(LOGS_DIR, `live${channelId}.log`);
     const pidPath = path.join(PIDS_DIR, `live${channelId}.pid`);
 
-    console.log(`[START-PIPE] Starting channel ${channelId} with Named Pipes`);
-    console.log(`[START-PIPE] Playlist: ${playlistPath}`);
+    console.log(`[START] Starting channel ${channelId} (mode: ${STREAM_MODE})`);
+    console.log(`[START] Playlist: ${playlistPath}`);
 
     try {
-        // 1. Create Named Pipe
-        const pipeManager = new PipeManager(channelId);
-        await pipeManager.create();
-        activePipes.set(channelId, pipeManager);
-
-        console.log(`[START-PIPE] Pipe created: ${pipeManager.getPath()}`);
-
-
         // Ensure HLS directory exists for Nginx
         const hlsDir = `/var/www/html/hls/live${channelId}`;
         if (!fs.existsSync(hlsDir)) {
             fs.mkdirSync(hlsDir, { recursive: true });
         }
 
-        // 2 & 3. Modularized restartable pusher
-        startPusher(channelId);
+        let pipeManager = null;
+        if (STREAM_MODE === 'pipe') {
+            // Create Named Pipe
+            pipeManager = new PipeManager(channelId);
+            await pipeManager.create();
+            activePipes.set(channelId, pipeManager);
+            console.log(`[START-PIPE] Pipe created: ${pipeManager.getPath()}`);
+            // Start pusher that reads from pipe
+            startPusher(channelId);
+        }
 
-        // 3. Start VideoStreamer (streams videos to pipe)
-        const videoStreamer = new VideoStreamer(channelId, pipeManager, playlistPath, VIDEOS_DIR);
+        // Start VideoStreamer
+        const options = STREAM_MODE === 'pipe'
+            ? { outputMode: 'pipe' }
+            : { outputMode: 'rtmp', outputTarget: `rtmp://localhost/live${channelId}/stream` };
+
+        const videoStreamer = new VideoStreamer(channelId, pipeManager, playlistPath, VIDEOS_DIR, options);
         activeStreamers.set(channelId, videoStreamer);
 
         // Start streaming in background (non-blocking)
         videoStreamer.start();
 
-        console.log(`[START-PIPE] VideoStreamer started for channel ${channelId}`);
-        console.log(`[START-PIPE] ✅ Channel ${channelId} is now LIVE with zero-downtime capability!`);
+        console.log(`[START] VideoStreamer started for channel ${channelId} (mode: ${STREAM_MODE})`);
+        console.log(`[START] ✅ Channel ${channelId} is now LIVE`);
 
     } catch (error) {
         console.error(`[START-PIPE] Error starting channel ${channelId}:`, error);
@@ -706,39 +718,42 @@ async function stopChannel(channelId) {
         console.log(`[STOP-PIPE] VideoStreamer stopped`);
     }
 
-    // 2. Stop FFmpeg
-    const ffmpeg = activeFfmpeg.get(channelId);
-    if (ffmpeg) {
-        try {
-            ffmpeg.kill('SIGTERM');
-            activeFfmpeg.delete(channelId);
-            console.log(`[STOP-PIPE] FFmpeg terminated`);
-        } catch (error) {
-            console.error(`[STOP-PIPE] Error killing FFmpeg:`, error);
+    // 2. Stop FFmpeg pusher (pipe mode only)
+    if (STREAM_MODE === 'pipe') {
+        const ffmpeg = activeFfmpeg.get(channelId);
+        if (ffmpeg) {
+            try {
+                ffmpeg.kill('SIGTERM');
+                activeFfmpeg.delete(channelId);
+                console.log(`[STOP-PIPE] FFmpeg pusher terminated`);
+            } catch (error) {
+                console.error(`[STOP-PIPE] Error killing FFmpeg pusher:`, error);
+            }
         }
-    }
 
-    // Also try killing via PID file (backward compatibility)
-    const pidPath = path.join(PIDS_DIR, `live${channelId}.pid`);
-    if (fs.existsSync(pidPath)) {
-        const pid = fs.readFileSync(pidPath, 'utf8').trim();
-        try {
-            process.kill(parseInt(pid));
-            fs.unlinkSync(pidPath);
-        } catch (error) {
-            // Process might already be dead
-            if (fs.existsSync(pidPath)) {
+        // Also try killing via PID file (backward compatibility)
+        const pidPath = path.join(PIDS_DIR, `live${channelId}.pid`);
+        if (fs.existsSync(pidPath)) {
+            const pid = fs.readFileSync(pidPath, 'utf8').trim();
+            try {
+                process.kill(parseInt(pid));
                 fs.unlinkSync(pidPath);
+            } catch (error) {
+                if (fs.existsSync(pidPath)) {
+                    fs.unlinkSync(pidPath);
+                }
             }
         }
     }
 
     // 3. Destroy Named Pipe
-    const pipe = activePipes.get(channelId);
-    if (pipe) {
-        await pipe.destroy();
-        activePipes.delete(channelId);
-        console.log(`[STOP-PIPE] Pipe destroyed`);
+    if (STREAM_MODE === 'pipe') {
+        const pipe = activePipes.get(channelId);
+        if (pipe) {
+            await pipe.destroy();
+            activePipes.delete(channelId);
+            console.log(`[STOP-PIPE] Pipe destroyed`);
+        }
     }
 
     // 4. Clean up HLS files to prevent playback of old content
@@ -762,17 +777,25 @@ async function stopChannel(channelId) {
 }
 
 function getChannelStatus(channelId) {
+    // Check if VideoStreamer is active (for both pipe and rtmp modes)
+    const streamer = activeStreamers.get(channelId);
+    if (streamer && streamer.isStreaming) {
+        return { running: true, mode: STREAM_MODE };
+    }
+
+    // Fallback: Check PID file (for pipe mode or backward compatibility)
     const pidPath = path.join(PIDS_DIR, `live${channelId}.pid`);
     if (fs.existsSync(pidPath)) {
         const pid = fs.readFileSync(pidPath, 'utf8').trim();
         try {
             process.kill(parseInt(pid), 0); // Check if process exists
-            return { running: true, pid: parseInt(pid) };
+            return { running: true, pid: parseInt(pid), mode: 'pipe' };
         } catch {
             fs.unlinkSync(pidPath);
             return { running: false };
         }
     }
+    
     return { running: false };
 }
 

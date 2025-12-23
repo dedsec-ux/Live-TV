@@ -21,7 +21,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - STREAM_MODE=rtmp
     restart: unless-stopped
+    pids_limit: 500  # Safety limit: allows ~30 channels, prevents runaway processes
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/admin-v2.html"]
       interval: 30s
