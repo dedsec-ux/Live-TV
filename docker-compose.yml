@@ -9,15 +9,12 @@ services:
       - "8080:8080"   # HTTP Alternative
       - "1935:1935"   # RTMP
       - "3000:3000"   # API
-    volumes:
-      # Persist video files
-      - ./videos:/opt/inbv-streaming/videos
-      # Persist playlists
-      - ./playlists:/opt/inbv-streaming/playlists
-      # Persist logs
-      - ./logs:/opt/inbv-streaming/logs
-      # Persist HLS streams
-      - ./hls:/var/www/html/hls
+    # COMMENTED OUT: Remove volumes to start fresh each time
+    # volumes:
+    #   - ./videos:/opt/inbv-streaming/videos
+    #   - ./playlists:/opt/inbv-streaming/playlists
+    #   - ./logs:/opt/inbv-streaming/logs
+    #   - ./hls:/var/www/html/hls
     environment:
       - NODE_ENV=production
       - PORT=3000
