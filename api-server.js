@@ -133,6 +133,54 @@ app.get('/api/channels/:id', (req, res) => {
     }
 });
 
+// Get single channel with video durations
+app.get('/api/channels/:id/details', async (req, res) => {
+    try {
+        const config = loadConfig();
+        const channel = config.channels.find(c => c.id === parseInt(req.params.id));
+        if (!channel) {
+            return res.status(404).json({ success: false, error: 'Channel not found' });
+        }
+
+        // Get video durations for each video
+        const videosWithDurations = await Promise.all(channel.videos.map(async (video) => {
+            const channelVideoPath = path.join(VIDEOS_DIR, `channel${channel.id}`, video.filename);
+            const globalVideoPath = path.join(VIDEOS_DIR, video.filename);
+            
+            let videoPath = null;
+            if (fs.existsSync(channelVideoPath)) {
+                videoPath = channelVideoPath;
+            } else if (fs.existsSync(globalVideoPath)) {
+                videoPath = globalVideoPath;
+            }
+
+            let duration = 0;
+            if (videoPath) {
+                try {
+                    duration = await getVideoDuration(videoPath);
+                } catch (error) {
+                    console.error(`Error getting duration for ${video.filename}:`, error);
+                }
+            }
+
+            return {
+                ...video,
+                duration: duration,
+                durationFormatted: formatDuration(duration)
+            };
+        }));
+
+        const channelWithDetails = {
+            ...channel,
+            videos: videosWithDurations
+        };
+
+        res.json({ success: true, channel: channelWithDetails });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Create new channel
 app.post('/api/channels', (req, res) => {
     try {
@@ -515,6 +563,41 @@ app.post('/api/stop-all', (req, res) => {
 });
 
 // ===== HELPER FUNCTIONS =====
+
+// Get video duration using ffprobe
+function getVideoDuration(videoPath) {
+    return new Promise((resolve) => {
+        const ffprobe = spawn('ffprobe', [
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            videoPath
+        ]);
+
+        let output = '';
+        ffprobe.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+
+        ffprobe.on('close', () => {
+            const duration = parseFloat(output.trim());
+            resolve(isNaN(duration) ? 0 : Math.ceil(duration));
+        });
+
+        ffprobe.on('error', () => {
+            resolve(0);
+        });
+    });
+}
+
+// Format duration in HH:MM:SS
+function formatDuration(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
 
 function generatePlaylist(channelId) {
     const config = loadConfig();

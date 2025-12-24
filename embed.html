@@ -109,8 +109,8 @@
         const autoplay = urlParams.get('autoplay') !== '0'; // Default true
         const muted = urlParams.get('muted') !== '0'; // Default true for autoplay
 
-        // Build stream URL - use protocol-relative URL or force HTTPS
-        const protocol = window.location.protocol === 'https:' ? 'https:' : 'https:'; // Force HTTPS
+        // Build stream URL - use the same protocol as the page (HTTP or HTTPS)
+        const protocol = window.location.protocol;
         const host = window.location.host;
         const streamUrl = `${protocol}//${host}/hls/live${channelId}/stream.m3u8`;
         

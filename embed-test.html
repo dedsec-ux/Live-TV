@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INBV Embed Code Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            color: #667eea;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #764ba2;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 250px;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin-top: 15px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #preview-section {
+            display: none;
+        }
+
+        .video-list {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 15px;
+        }
+
+        .video-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .video-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .video-name {
+            font-weight: 600;
+            color: #1f2937;
+            flex: 1;
+            margin-right: 15px;
+        }
+
+        .video-duration {
+            font-family: 'Courier New', monospace;
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            font-weight: 600;
+            opacity: 0.9;
+        }
+
+        .info-value {
+            font-weight: bold;
+        }
+
+        .embed-preview {
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 2px solid #ef4444;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .instructions {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .instructions h3 {
+            color: #1e40af;
+            margin-bottom: 10px;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #10b981;
+            color: white;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .video-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .video-duration {
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 INBV Embed Code Tester</h1>
+            <p class="subtitle">Paste your embed code to preview and see all video details</p>
+        </header>
+
+        <div class="section">
+            <div class="instructions">
+                <h3>📝 How to Use:</h3>
+                <ol>
+                    <li>Go to the <strong>Player Page</strong> and click "Copy Embed Code" for any channel</li>
+                    <li>Paste the entire embed code in the textarea below</li>
+                    <li>Click "Parse & Preview" to see the channel details and video list</li>
+                    <li>The embed player will load below with all video information displayed</li>
+                </ol>
+            </div>
+
+            <div class="section-title">📋 Paste Embed Code Here</div>
+            <textarea id="embedInput" placeholder="Paste your embed code here...
+
+Example:
+<!-- INBV Stream Embed - Channel: Channel 1 -->
+<iframe src='...' width='100%' height='600' ...></iframe>"></textarea>
+            <button class="btn" onclick="parseAndPreview()">🔍 Parse & Preview</button>
+            <div id="errorMessage"></div>
+        </div>
+
+        <div class="section" id="preview-section">
+            <div class="section-title">📊 Channel Information</div>
+            <div class="info-card" id="channelInfo"></div>
+
+            <div class="section-title">🎥 Video Playlist</div>
+            <div class="video-list" id="videoList"></div>
+
+            <div class="section-title">📺 Live Preview</div>
+            <div class="embed-preview" id="embedPreview"></div>
+        </div>
+    </div>
+
+    <script>
+        function parseAndPreview() {
+            const input = document.getElementById('embedInput').value.trim();
+            const errorDiv = document.getElementById('errorMessage');
+            const previewSection = document.getElementById('preview-section');
+
+            // Clear previous errors
+            errorDiv.innerHTML = '';
+
+            if (!input) {
+                showError('Please paste an embed code first!');
+                return;
+            }
+
+            try {
+                // Extract channel info from comments
+                const channelNameMatch = input.match(/Channel:\s*(.+?)(?:\s*-->|\n)/);
+                const videoCountMatch = input.match(/Videos in this channel:\s*(\d+)/);
+                const playlistMatch = input.match(/Playlist:\s*([\s\S]*?)-->/);
+                
+                // Extract iframe
+                const iframeMatch = input.match(/<iframe[\s\S]*?<\/iframe>/);
+                
+                if (!iframeMatch) {
+                    showError('No valid iframe found in the embed code!');
+                    return;
+                }
+
+                const iframe = iframeMatch[0];
+                
+                // Extract channel ID from iframe src
+                const channelIdMatch = iframe.match(/channel=(\d+)/);
+                const channelId = channelIdMatch ? channelIdMatch[1] : 'Unknown';
+
+                // Extract data attributes
+                const channelNameAttr = iframe.match(/data-channel-name="([^"]+)"/);
+                const videoCountAttr = iframe.match(/data-video-count="([^"]+)"/);
+
+                const channelName = channelNameMatch ? channelNameMatch[1].trim() : 
+                                  (channelNameAttr ? channelNameAttr[1] : `Channel ${channelId}`);
+                const videoCount = videoCountMatch ? videoCountMatch[1] : 
+                                 (videoCountAttr ? videoCountAttr[1] : '0');
+
+                // Parse video list from playlist comment
+                let videos = [];
+                if (playlistMatch) {
+                    const playlistText = playlistMatch[1].trim();
+                    const videoLines = playlistText.split('\n').filter(line => line.trim());
+                    
+                    videos = videoLines.map(line => {
+                        // Parse format: "1. video.mp4 (01:23:45)"
+                        const match = line.match(/\d+\.\s*(.+?)\s*\((\d{2}:\d{2}:\d{2})\)/);
+                        if (match) {
+                            return {
+                                name: match[1].trim(),
+                                duration: match[2]
+                            };
+                        }
+                        return null;
+                    }).filter(v => v !== null);
+                }
+
+                // Display channel info
+                displayChannelInfo(channelName, channelId, videoCount);
+
+                // Display video list
+                displayVideoList(videos);
+
+                // Display embed preview
+                displayEmbedPreview(iframe);
+
+                // Show preview section
+                previewSection.style.display = 'block';
+
+                // Smooth scroll to preview
+                setTimeout(() => {
+                    previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+
+            } catch (error) {
+                console.error('Parse error:', error);
+                showError('Error parsing embed code. Please make sure you copied the complete code.');
+            }
+        }
+
+        function displayChannelInfo(name, id, videoCount) {
+            const infoDiv = document.getElementById('channelInfo');
+            infoDiv.innerHTML = `
+                <div class="info-row">
+                    <span class="info-label">Channel Name:</span>
+                    <span class="info-value">${escapeHtml(name)}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Channel ID:</span>
+                    <span class="info-value">${escapeHtml(id)}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Videos:</span>
+                    <span class="info-value">${videoCount} video${videoCount != 1 ? 's' : ''}</span>
+                </div>
+            `;
+        }
+
+        function displayVideoList(videos) {
+            const listDiv = document.getElementById('videoList');
+            
+            if (videos.length === 0) {
+                listDiv.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #6b7280;">
+                        <div style="font-size: 3em; margin-bottom: 10px;">📭</div>
+                        <div style="font-size: 1.2em;">No video details found in embed code</div>
+                        <div style="margin-top: 10px; font-size: 0.9em;">Make sure you copied the embed code from the updated player page</div>
+                    </div>
+                `;
+                return;
+            }
+
+            let totalSeconds = 0;
+            videos.forEach(video => {
+                const parts = video.duration.split(':');
+                totalSeconds += parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+            });
+
+            const totalHours = Math.floor(totalSeconds / 3600);
+            const totalMinutes = Math.floor((totalSeconds % 3600) / 60);
+            const totalSecs = totalSeconds % 60;
+            const totalDuration = `${totalHours.toString().padStart(2, '0')}:${totalMinutes.toString().padStart(2, '0')}:${totalSecs.toString().padStart(2, '0')}`;
+
+            let html = `
+                <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 2px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: bold; color: #667eea;">📊 Total Playlist Duration:</span>
+                        <span style="font-family: 'Courier New', monospace; font-size: 1.2em; font-weight: bold; color: #764ba2;">${totalDuration}</span>
+                    </div>
+                </div>
+            `;
+
+            videos.forEach((video, index) => {
+                html += `
+                    <div class="video-item">
+                        <span class="video-name">
+                            <strong>${index + 1}.</strong> ${escapeHtml(video.name)}
+                        </span>
+                        <span class="video-duration">${video.duration}</span>
+                    </div>
+                `;
+            });
+
+            listDiv.innerHTML = html;
+        }
+
+        function displayEmbedPreview(iframe) {
+            const previewDiv = document.getElementById('embedPreview');
+            previewDiv.innerHTML = iframe;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.innerHTML = `
+                <div class="error-message">
+                    <strong>⚠️ Error:</strong> ${escapeHtml(message)}
+                </div>
+            `;
+            document.getElementById('preview-section').style.display = 'none';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Allow Ctrl+Enter or Cmd+Enter to parse
+        document.getElementById('embedInput').addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                parseAndPreview();
+            }
+        });
+    </script>
+</body>
+
+</html>

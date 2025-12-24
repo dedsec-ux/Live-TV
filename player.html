@@ -660,9 +660,60 @@
         }
 
         function copyEmbedCode(channelId) {
-            const baseUrl = `https://${window.location.host}`;
-            const embedCode = `<iframe src="${baseUrl}/embed.html?channel=${channelId}&autoplay=1&muted=1" width="100%" height="600" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
-            copyText(embedCode);
+            // Find the channel data
+            const channel = channels.find(ch => ch.id === channelId);
+            if (!channel) return;
+
+            // Fetch channel details with durations
+            fetch(`${API_URL}/channels/${channelId}/details`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.channel) {
+                        const channelDetails = data.channel;
+                        const baseUrl = window.location.protocol + '//' + window.location.host;
+                        
+                        // Create video list with durations
+                        const videoList = channelDetails.videos.map((v, idx) => {
+                            const name = v.originalName || v.filename;
+                            const duration = v.durationFormatted || '00:00:00';
+                            return `${idx + 1}. ${name} (${duration})`;
+                        }).join('\n');
+
+                        // Create the embed code with data attributes
+                        const embedCode = `<!-- INBV Stream Embed - Channel: ${channelDetails.name} -->
+<!-- Videos in this channel: ${channelDetails.videos.length} -->
+<!-- Playlist:
+${videoList}
+-->
+<iframe 
+    src="${baseUrl}/embed.html?channel=${channelId}&autoplay=1&muted=1" 
+    width="100%" 
+    height="600" 
+    frameborder="0" 
+    allow="autoplay; fullscreen; picture-in-picture" 
+    allowfullscreen
+    data-channel-id="${channelId}"
+    data-channel-name="${channelDetails.name}"
+    data-video-count="${channelDetails.videos.length}">
+</iframe>
+
+<!-- Channel Details:
+     Name: ${channelDetails.name}
+     Total Videos: ${channelDetails.videos.length}
+     Video List:
+${videoList}
+-->`;
+                        
+                        copyText(embedCode);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching channel details:', error);
+                    // Fallback to simple embed code
+                    const baseUrl = window.location.protocol + '//' + window.location.host;
+                    const embedCode = `<iframe src="${baseUrl}/embed.html?channel=${channelId}&autoplay=1&muted=1" width="100%" height="600" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+                    copyText(embedCode);
+                });
         }
 
         // Initialize on page load
