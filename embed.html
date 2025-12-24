@@ -109,8 +109,10 @@
         const autoplay = urlParams.get('autoplay') !== '0'; // Default true
         const muted = urlParams.get('muted') !== '0'; // Default true for autoplay
 
-        // Build stream URL - use relative path to work with proxies
-        const streamUrl = `/hls/live${channelId}/stream.m3u8`;
+        // Build stream URL - use protocol-relative URL or force HTTPS
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'https:'; // Force HTTPS
+        const host = window.location.host;
+        const streamUrl = `${protocol}//${host}/hls/live${channelId}/stream.m3u8`;
         
         console.log(`[EMBED] Loading channel ${channelId} from: ${streamUrl}`);
         // Initialize player

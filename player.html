@@ -660,7 +660,7 @@
         }
 
         function copyEmbedCode(channelId) {
-            const baseUrl = window.location.origin;
+            const baseUrl = `https://${window.location.host}`;
             const embedCode = `<iframe src="${baseUrl}/embed.html?channel=${channelId}&autoplay=1&muted=1" width="100%" height="600" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
             copyText(embedCode);
         }
