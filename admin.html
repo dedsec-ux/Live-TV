@@ -519,7 +519,7 @@
             <div class="upload-section" id="uploadSection" onclick="document.getElementById('fileInput').click()">
                 <p style="font-size: 1.2em; margin-bottom: 10px;">🎬 Click or Drag & Drop videos here</p>
                 <p style="color: #6b7280;">Supported: All video formats (MP4, AVI, MOV, MKV, FLV, WEBM, WMV, etc.) - Up to 10GB per file</p>
-                <input type="file" id="fileInput" accept="video/*" multiple onchange="handleFileSelect(this.files)">
+                <input type="file" id="fileInput" accept="video/*,.mp4,.avi,.mov,.mkv,.flv,.webm,.wmv,.m4v,.3gp,.3gpp,.mpeg,.mpg,.mpe,.m2v,.m4p,.ogv,.ogg,.vob,.ts,.mts,.m2ts,.qt,.yuv,.rm,.rmvb,.asf,.amv,.mp2,.mpv,.svi,.3g2,.mxf,.roq,.nsv,.f4v,.f4p,.f4a,.f4b,.divx" multiple onchange="handleFileSelect(this.files)">
                 <div id="uploadProgress" style="margin-top: 20px; display: none;">
                     <p id="uploadStatus">Uploading...</p>
                     <div class="progress-bar">
