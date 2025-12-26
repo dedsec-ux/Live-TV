@@ -68,14 +68,16 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage: storage,
     fileFilter: (req, file, cb) => {
-        // Support all common video formats
-        const allowedTypes = /mp4|avi|mov|mkv|flv|webm|wmv|m4v|3gp|asf|ogv/;
+        // Support ALL video formats - comprehensive list
+        const allowedTypes = /\.(mp4|avi|mov|mkv|flv|webm|wmv|m4v|3gp|3gpp|mpeg|mpg|mpe|m2v|m4p|ogv|ogg|vob|ts|mts|m2ts|qt|yuv|rm|rmvb|asf|amv|mp2|mpe|mpv|m2v|svi|3g2|mxf|roq|nsv|f4v|f4p|f4a|f4b|divx)$/i;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = file.mimetype.startsWith('video/');
+        const mimetype = file.mimetype.startsWith('video/') || file.mimetype === 'application/octet-stream';
 
-        if (mimetype || extname) {
+        if (extname || mimetype) {
+            console.log(`[UPLOAD] Accepting file: ${file.originalname} (${file.mimetype})`);
             return cb(null, true);
         } else {
+            console.log(`[UPLOAD-ERROR] Rejecting file: ${file.originalname} (${file.mimetype})`);
             cb(new Error('Only video files are allowed!'));
         }
     },
@@ -432,7 +434,7 @@ app.post('/api/upload', upload.single('video'), (req, res) => {
 app.get('/api/videos', (req, res) => {
     try {
         const files = fs.readdirSync(VIDEOS_DIR)
-            .filter(file => /\.(mp4|avi|mov|mkv|flv)$/i.test(file))
+            .filter(file => /\.(mp4|avi|mov|mkv|flv|webm|wmv|m4v|3gp|3gpp|mpeg|mpg|mpe|m2v|m4p|ogv|ogg|vob|ts|mts|m2ts|qt|yuv|rm|rmvb|asf|amv|mp2|mpe|mpv|m2v|svi|3g2|mxf|roq|nsv|f4v|f4p|f4a|f4b|divx)$/i.test(file))
             .map(file => {
                 const stats = fs.statSync(path.join(VIDEOS_DIR, file));
                 return {
