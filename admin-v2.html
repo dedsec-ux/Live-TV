@@ -1398,6 +1398,10 @@
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
 
+        // ===== SCHEDULING FUNCTIONS =====
+
+        // Schedule functionality removed - using actual start time tracking
+
         // Update playback status for all channels
         async function updateAllPlaybackStatuses() {
             for (const channel of allChannels) {

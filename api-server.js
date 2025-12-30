@@ -43,6 +43,56 @@ const activeFfmpeg = new Map();    // channelId -> FFmpeg process
     }
 });
 
+// ===== ACCURATE AUTO-START SCHEDULER =====
+// Check every 1 second for precise timing
+console.log('[SCHEDULER] Auto-start scheduler initialized - checking every 1 second');
+
+setInterval(async () => {
+    try {
+        const config = loadConfig();
+        const now = new Date();
+        
+        for (const channel of config.channels) {
+            if (channel.scheduledStartTime && channel.videos && channel.videos.length > 0) {
+                const scheduledTime = new Date(channel.scheduledStartTime);
+                const secondsUntil = Math.floor((scheduledTime - now) / 1000);
+                
+                // Start when time is reached (within 2 second window)
+                if (secondsUntil <= 0 && secondsUntil >= -2) {
+                    const status = getChannelStatus(channel.id);
+                    if (!status.running) {
+                        console.log(`[AUTO-START] ⏰ Triggering channel ${channel.id} (${channel.name})`);
+                        
+                        try {
+                            await startChannel(channel.id);
+                            console.log(`[AUTO-START] ✅ Channel ${channel.id} is now LIVE!`);
+                            
+                            // Clear schedule
+                            const updatedConfig = loadConfig();
+                            const ch = updatedConfig.channels.find(c => c.id === channel.id);
+                            if (ch) {
+                                ch.scheduledStartTime = null;
+                                saveConfig(updatedConfig);
+                            }
+                        } catch (error) {
+                            console.error(`[AUTO-START] ❌ Failed: ${error.message}`);
+                        }
+                    } else {
+                        // Already running, clear schedule
+                        channel.scheduledStartTime = null;
+                        saveConfig(config);
+                    }
+                } else if (secondsUntil > 0 && secondsUntil <= 10) {
+                    // Log countdown for last 10 seconds
+                    console.log(`[AUTO-START] Channel ${channel.id} starting in ${secondsUntil}s`);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('[SCHEDULER] Error:', error.message);
+    }
+}, 1000); // Check every 1 second for accuracy
+
 // Configure multer for video uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -89,16 +139,9 @@ function loadConfig() {
     if (fs.existsSync(CONFIG_FILE)) {
         return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
     }
-    // Default config with 6 channels
+    // Default config starts with empty channels - user creates their own
     const defaultConfig = {
-        channels: [
-            { id: 1, name: 'Channel 1', videos: [], enabled: true },
-            { id: 2, name: 'Channel 2', videos: [], enabled: true },
-            { id: 3, name: 'Channel 3', videos: [], enabled: true },
-            { id: 4, name: 'Channel 4', videos: [], enabled: true },
-            { id: 5, name: 'Channel 5', videos: [], enabled: true },
-            { id: 6, name: 'Channel 6', videos: [], enabled: true }
-        ]
+        channels: []
     };
     saveConfig(defaultConfig);
     return defaultConfig;
@@ -134,6 +177,8 @@ app.get('/api/channels/:id', (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// Schedule endpoints removed - using manual start timestamp
 
 // Get single channel with video durations
 app.get('/api/channels/:id/details', async (req, res) => {
@@ -192,7 +237,8 @@ app.post('/api/channels', (req, res) => {
             id: newId,
             name: req.body.name || `Channel ${newId}`,
             videos: [],
-            enabled: true
+            enabled: true,
+            scheduledStartTime: null
         };
 
         // Create HLS directory for this channel
@@ -674,6 +720,11 @@ app.get('/api/webhook/channel-playlist', async (req, res) => {
                 playbackInfo = streamer.getPlaybackStatus();
             }
         }
+        
+        // Get actual start time if channel was started
+        const actualStartTime = channelData.actualStartTime || null;
+        const actualStartFormatted = actualStartTime ? 
+            new Date(actualStartTime).toLocaleString('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'long' }) + ' UTC' : null;
 
         // Get video details with durations
         const videosWithDetails = await Promise.all(channelData.videos.map(async (video, index) => {
@@ -726,7 +777,9 @@ app.get('/api/webhook/channel-playlist', async (req, res) => {
                 isLive: status.running,
                 videoCount: channelData.videos.length,
                 totalDuration: totalDuration,
-                totalDurationFormatted: formatDuration(totalDuration)
+                totalDurationFormatted: formatDuration(totalDuration),
+                actualStartTime: actualStartTime,
+                actualStartFormatted: actualStartFormatted
             },
             playback: status.running ? {
                 isPlaying: playbackInfo?.isPlaying || false,
@@ -922,6 +975,10 @@ async function startChannel(channelId) {
         return;
     }
 
+    // Record actual start time
+    channel.actualStartTime = new Date().toISOString();
+    saveConfig(config);
+
     // Generate playlist
     generatePlaylist(channelId);
 
@@ -1074,6 +1131,14 @@ async function startPusher(channelId) {
 
 async function stopChannel(channelId) {
     console.log(`[STOP-PIPE] Stopping channel ${channelId}...`);
+
+    // Clear actual start time
+    const config = loadConfig();
+    const channel = config.channels.find(c => c.id === channelId);
+    if (channel) {
+        channel.actualStartTime = null;
+        saveConfig(config);
+    }
 
     // 1. Stop VideoStreamer
     const streamer = activeStreamers.get(channelId);
