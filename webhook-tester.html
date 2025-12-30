@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webhook API Tester - INBV Streaming</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 1.8em;
+            color: #1e3c72;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .label {
+            display: block;
+            font-weight: bold;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .radio-option input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .response-box {
+            background: #1f2937;
+            color: #10b981;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .channel-info {
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .channel-info h3 {
+            color: #1e3c72;
+            margin-bottom: 10px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #6b7280;
+        }
+
+        .info-value {
+            color: #1f2937;
+            font-family: monospace;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .badge-live {
+            background: #10b981;
+            color: white;
+        }
+
+        .badge-offline {
+            background: #ef4444;
+            color: white;
+        }
+
+        .video-list {
+            margin-top: 15px;
+        }
+
+        .video-item {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .video-item.playing {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
+        }
+
+        .video-name {
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .video-meta {
+            font-size: 0.85em;
+            color: #6b7280;
+            display: flex;
+            gap: 15px;
+        }
+
+        .now-playing-indicator {
+            color: #667eea;
+            font-weight: bold;
+            margin-top: 4px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .error {
+            background: #fef2f2;
+            border: 2px solid #ef4444;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .quick-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .quick-link {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+
+        .quick-link:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .auto-refresh input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🔗 Webhook API Tester</h1>
+            <p class="subtitle">Test INBV Streaming Server Webhook Endpoints</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Left Panel: Request Builder -->
+            <div class="card">
+                <h2 class="card-title">📤 Request Builder</h2>
+
+                <div class="input-group">
+                    <label class="label">Select Endpoint:</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="endpoint1" name="endpoint" value="single" checked>
+                            <label for="endpoint1">Single Channel</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="endpoint2" name="endpoint" value="all">
+                            <label for="endpoint2">All Live Channels</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="singleChannelInputs">
+                    <div class="input-group">
+                        <label class="label">Input Method:</label>
+                        <select id="inputMethod" class="input" onchange="updateInputField()">
+                            <option value="channelId">Channel ID</option>
+                            <option value="url">HLS Stream URL</option>
+                            <option value="link">Embed Link</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label class="label" id="inputLabel">Channel ID:</label>
+                        <input type="text" id="inputValue" class="input" placeholder="1" value="1">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <button class="btn btn-primary" onclick="sendRequest()" style="width: 100%;">
+                        🚀 Send Request
+                    </button>
+                </div>
+
+                <div class="auto-refresh">
+                    <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+                    <label for="autoRefresh">Auto-refresh every 3 seconds</label>
+                </div>
+
+                <div class="quick-links">
+                    <div class="quick-link" onclick="quickTest(1)">Test Channel 1</div>
+                    <div class="quick-link" onclick="quickTest(2)">Test Channel 2</div>
+                    <div class="quick-link" onclick="testAllLive()">Test All Live</div>
+                    <div class="quick-link" onclick="copyApiUrl()">📋 Copy API URL</div>
+                </div>
+
+                <div class="input-group" style="margin-top: 30px;">
+                    <label class="label">Current API URL:</label>
+                    <input type="text" id="apiUrl" class="input" readonly>
+                </div>
+            </div>
+
+            <!-- Right Panel: Response Viewer -->
+            <div class="card">
+                <h2 class="card-title">📥 Response</h2>
+                <div id="responseContent">
+                    <div class="loading">
+                        Click "Send Request" to test the API
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full JSON Response -->
+        <div class="card">
+            <h2 class="card-title">📋 Raw JSON Response</h2>
+            <pre id="jsonResponse" class="response-box">No response yet</pre>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = `${window.location.protocol}//${window.location.host}/api/webhook`;
+        let autoRefreshInterval = null;
+
+        // Update input field based on method
+        function updateInputField() {
+            const method = document.getElementById('inputMethod').value;
+            const label = document.getElementById('inputLabel');
+            const input = document.getElementById('inputValue');
+
+            switch (method) {
+                case 'channelId':
+                    label.textContent = 'Channel ID:';
+                    input.placeholder = '1';
+                    input.value = '1';
+                    break;
+                case 'url':
+                    label.textContent = 'HLS Stream URL:';
+                    input.placeholder = 'http://localhost/hls/live1/stream.m3u8';
+                    input.value = `${window.location.protocol}//${window.location.host}/hls/live1/stream.m3u8`;
+                    break;
+                case 'link':
+                    label.textContent = 'Embed Link:';
+                    input.placeholder = '/embed.html?channel=1';
+                    input.value = '/embed.html?channel=1';
+                    break;
+            }
+        }
+
+        // Build API URL
+        function buildApiUrl() {
+            const endpoint = document.querySelector('input[name="endpoint"]:checked').value;
+
+            if (endpoint === 'all') {
+                return `${API_BASE}/live-channels`;
+            } else {
+                const method = document.getElementById('inputMethod').value;
+                const value = document.getElementById('inputValue').value;
+                return `${API_BASE}/channel-playlist?${method}=${encodeURIComponent(value)}`;
+            }
+        }
+
+        // Update API URL display
+        function updateApiUrlDisplay() {
+            document.getElementById('apiUrl').value = buildApiUrl();
+        }
+
+        // Send request
+        async function sendRequest() {
+            const url = buildApiUrl();
+            document.getElementById('apiUrl').value = url;
+            document.getElementById('responseContent').innerHTML = '<div class="loading">Loading...</div>';
+            document.getElementById('jsonResponse').textContent = 'Loading...';
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                // Display formatted response
+                displayResponse(data);
+
+                // Display raw JSON
+                document.getElementById('jsonResponse').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('responseContent').innerHTML = `
+                    <div class="error">
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+                document.getElementById('jsonResponse').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Display formatted response
+        function displayResponse(data) {
+            const container = document.getElementById('responseContent');
+
+            if (!data.success) {
+                container.innerHTML = `
+                    <div class="error">
+                        <strong>Error:</strong> ${data.error || 'Unknown error'}
+                        ${data.message ? `<br><br>${data.message}` : ''}
+                    </div>
+                `;
+                return;
+            }
+
+            // Check if it's all live channels or single channel
+            if (data.channels) {
+                // Multiple channels
+                container.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <strong>Live Channels:</strong> ${data.liveChannelCount} / ${data.totalChannels}
+                    </div>
+                    ${data.channels.map(ch => renderChannelInfo(ch, false)).join('')}
+                `;
+            } else if (data.channel) {
+                // Single channel
+                container.innerHTML = renderChannelInfo(data, true);
+            }
+        }
+
+        // Render channel info
+        function renderChannelInfo(data, isSingle) {
+            const channel = isSingle ? data.channel : data;
+            const playback = isSingle ? data.playback : { isPlaying: false };
+            const playlist = isSingle ? data.playlist : data.playlist;
+
+            const isLive = isSingle ? channel.isLive : true;
+
+            let html = `
+                <div class="channel-info">
+                    <h3>
+                        ${channel.name || `Channel ${channel.id}`}
+                        <span class="badge ${isLive ? 'badge-live' : 'badge-offline'}">
+                            ${isLive ? '🔴 LIVE' : '⏹️ OFFLINE'}
+                        </span>
+                    </h3>
+                    <div class="info-row">
+                        <span class="info-label">Channel ID:</span>
+                        <span class="info-value">${channel.id}</span>
+                    </div>
+                    ${isSingle ? `
+                    <div class="info-row">
+                        <span class="info-label">Total Videos:</span>
+                        <span class="info-value">${channel.videoCount}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Total Duration:</span>
+                        <span class="info-value">${channel.totalDurationFormatted || '00:00:00'}</span>
+                    </div>
+                    ` : ''}
+            `;
+
+            if (isLive && playback.isPlaying) {
+                html += `
+                    <div class="info-row">
+                        <span class="info-label">Current Video:</span>
+                        <span class="info-value">${playback.currentVideoName || data.currentVideo || 'N/A'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Progress:</span>
+                        <span class="info-value">${playback.elapsedTimeFormatted || data.elapsedTimeFormatted || '00:00:00'} / ${playback.totalVideoDurationFormatted || '00:00:00'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Remaining:</span>
+                        <span class="info-value">${playback.remainingTimeFormatted || '00:00:00'}</span>
+                    </div>
+                `;
+            }
+
+            if (playlist && playlist.length > 0) {
+                html += `
+                    <div class="video-list">
+                        <strong>Playlist (${playlist.length} videos):</strong>
+                        ${playlist.map(v => `
+                            <div class="video-item ${v.isCurrentlyPlaying ? 'playing' : ''}">
+                                <div class="video-name">${v.index + 1}. ${v.originalName}</div>
+                                <div class="video-meta">
+                                    <span>Duration: ${v.durationFormatted}</span>
+                                    ${v.sizeFormatted ? `<span>Size: ${v.sizeFormatted}</span>` : ''}
+                                </div>
+                                ${v.isCurrentlyPlaying ? '<div class="now-playing-indicator">▶️ NOW PLAYING</div>' : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
+        // Quick test functions
+        function quickTest(channelId) {
+            document.getElementById('inputMethod').value = 'channelId';
+            document.getElementById('inputValue').value = channelId;
+            document.querySelector('input[value="single"]').checked = true;
+            updateInputField();
+            updateApiUrlDisplay();
+            sendRequest();
+        }
+
+        function testAllLive() {
+            document.querySelector('input[value="all"]').checked = true;
+            updateApiUrlDisplay();
+            sendRequest();
+        }
+
+        function copyApiUrl() {
+            const url = buildApiUrl();
+            navigator.clipboard.writeText(url).then(() => {
+                alert('API URL copied to clipboard!');
+            });
+        }
+
+        // Auto-refresh
+        function toggleAutoRefresh() {
+            const enabled = document.getElementById('autoRefresh').checked;
+
+            if (enabled) {
+                sendRequest(); // Send immediately
+                autoRefreshInterval = setInterval(sendRequest, 3000);
+            } else {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }
+        }
+
+        // Event listeners
+        document.querySelectorAll('input[name="endpoint"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                const isSingle = radio.value === 'single';
+                document.getElementById('singleChannelInputs').style.display = isSingle ? 'block' : 'none';
+                updateApiUrlDisplay();
+            });
+        });
+
+        document.getElementById('inputMethod').addEventListener('change', updateApiUrlDisplay);
+        document.getElementById('inputValue').addEventListener('input', updateApiUrlDisplay);
+
+        // Initialize
+        updateApiUrlDisplay();
+    </script>
+</body>
+
+</html>

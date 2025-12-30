@@ -84,6 +84,12 @@
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
+            filter: grayscale(50%);
+        }
+
+        .btn:disabled:hover {
+            transform: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
         }
 
         .btn-primary {
@@ -281,6 +287,91 @@
         .video-actions {
             display: flex;
             gap: 8px;
+        }
+
+        /* Currently Playing Video Highlight */
+        .video-item.now-playing {
+            background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
+            border: 2px solid #3b82f6;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+
+        .video-item.now-playing .video-index {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulseGlow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+            }
+
+            50% {
+                box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+            }
+        }
+
+        .video-playback-info {
+            font-size: 0.85em;
+            color: #1e40af;
+            font-weight: 600;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .playback-progress {
+            height: 4px;
+            background: #bfdbfe;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 6px;
+            position: relative;
+        }
+
+        .playback-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #2563eb);
+            transition: width 1s linear;
+            border-radius: 2px;
+        }
+
+        .now-playing-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: bold;
+        }
+
+        .now-playing-dot {
+            width: 6px;
+            height: 6px;
+            background: #fbbf24;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(1.2);
+            }
         }
 
         .channel-controls {
@@ -563,9 +654,11 @@
             <div class="modal-header">Upload Videos to <span id="uploadChannelName"></span></div>
             <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
                 <p style="font-size: 1.2em; margin-bottom: 10px;">🎬 Click or Drag & Drop videos here</p>
-                <p style="color: #6b7280;">Supported: All video formats (MP4, AVI, MOV, MKV, FLV, WEBM, WMV, etc.) - Up to 10GB per file</p>
-                <input type="file" id="fileInput" accept="video/*,.mp4,.avi,.mov,.mkv,.flv,.webm,.wmv,.m4v,.3gp,.3gpp,.mpeg,.mpg,.mpe,.m2v,.m4p,.ogv,.ogg,.vob,.ts,.mts,.m2ts,.qt,.yuv,.rm,.rmvb,.asf,.amv,.mp2,.mpv,.svi,.3g2,.mxf,.roq,.nsv,.f4v,.f4p,.f4a,.f4b,.divx" multiple style="display: none;"
-                    onchange="handleFileUpload(this.files)">
+                <p style="color: #6b7280;">Supported: All video formats (MP4, AVI, MOV, MKV, FLV, WEBM, WMV, etc.) - Up
+                    to 10GB per file</p>
+                <input type="file" id="fileInput"
+                    accept="video/*,.mp4,.avi,.mov,.mkv,.flv,.webm,.wmv,.m4v,.3gp,.3gpp,.mpeg,.mpg,.mpe,.m2v,.m4p,.ogv,.ogg,.vob,.ts,.mts,.m2ts,.qt,.yuv,.rm,.rmvb,.asf,.amv,.mp2,.mpv,.svi,.3g2,.mxf,.roq,.nsv,.f4v,.f4p,.f4a,.f4b,.divx"
+                    multiple style="display: none;" onchange="handleFileUpload(this.files)">
                 <div id="uploadProgress"
                     style="margin-top: 20px; display: none; background: #f0f9ff; padding: 20px; border-radius: 10px; border: 2px solid #3b82f6;">
                     <p id="uploadStatus"
@@ -600,6 +693,7 @@
         const API_URL = `${window.location.protocol}//${window.location.host}/api`;
         let allChannels = [];
         let currentUploadChannelId = null;
+        let channelStatuses = new Map(); // Track which channels are running
 
         // Initialize
         async function init() {
@@ -608,6 +702,8 @@
             setupVideoDragDrop();
             // Auto-refresh every 5 seconds
             setInterval(checkAllStatuses, 5000);
+            // Update playback status every second
+            setInterval(updateAllPlaybackStatuses, 1000);
         }
 
         // Load all channels
@@ -659,24 +755,39 @@
             div.className = 'channel-card';
             div.id = `channel-${channel.id}`;
 
+            // Check if channel is running
+            const isRunning = channelStatuses.get(channel.id) || false;
+
             const videosHtml = channel.videos.length > 0
                 ? channel.videos.map((v, index) => `
-                    <div class="video-item" draggable="true" 
+                    <div class="video-item ${isRunning ? 'no-drag' : ''}" 
+                         draggable="${!isRunning}" 
                          data-channel-id="${channel.id}" 
                          data-video-index="${index}"
-                         data-video-filename="${v.filename}">
+                         data-video-filename="${v.filename}"
+                         ${isRunning ? 'style="cursor: default; opacity: 0.95;"' : ''}>
                         <div class="video-info">
-                            <div class="drag-handle" title="Drag to reorder">⋮⋮</div>
+                            <div class="drag-handle" ${isRunning ? 'style="opacity: 0.3; cursor: not-allowed;" title="Stop stream to reorder videos"' : 'title="Drag to reorder"'}>⋮⋮</div>
                             <div class="video-index">${index + 1}</div>
                             <div class="video-details">
                                 <div class="video-name">${v.originalName || v.filename}</div>
                                 <div class="video-size">${formatBytes(v.size)}</div>
+                                <div class="video-playback-info" id="playback-${channel.id}-${index}" style="display: none;">
+                                    <span class="now-playing-badge">
+                                        <span class="now-playing-dot"></span>
+                                        NOW PLAYING
+                                    </span>
+                                    <span id="playback-time-${channel.id}-${index}">00:00 / 00:00</span>
+                                </div>
+                                <div class="playback-progress" id="progress-${channel.id}-${index}" style="display: none;">
+                                    <div class="playback-progress-bar" id="progress-bar-${channel.id}-${index}" style="width: 0%"></div>
+                                </div>
                             </div>
                         </div>
                         <div class="video-actions">
                             <button class="btn btn-danger btn-small" 
                                     onclick="deleteVideoFromChannel(${channel.id}, '${v.filename}')"
-                                    title="Permanently delete this video">
+                                    ${isRunning ? 'disabled title="Stop stream to delete videos"' : 'title="Permanently delete this video"'}>
                                 🗑️ Delete
                             </button>
                         </div>
@@ -693,12 +804,48 @@
                 <div class="videos-section">
                     <div class="videos-header">
                         <div class="videos-count">📼 ${channel.videos.length} video(s)</div>
-                        <button class="btn btn-primary btn-small" onclick="openUploadModal(${channel.id}, '${channel.name}')">
+                        <button class="btn btn-primary btn-small" 
+                                id="upload-btn-${channel.id}"
+                                onclick="openUploadModal(${channel.id}, '${channel.name}')"
+                                ${isRunning ? 'disabled title="⚠️ Stop stream to upload videos"' : 'title="Upload videos to this channel"'}>
                             📤 Upload Videos
                         </button>
                     </div>
                     <div class="videos-list">
                         ${videosHtml}
+                    </div>
+                </div>
+
+                <div class="videos-section" style="border-top: 2px dashed #e5e7eb; padding-top: 15px; margin-top: 15px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                        <div style="font-weight: bold; color: #667eea; display: flex; align-items: center; gap: 8px;">
+                            <span>🔗</span>
+                            <span>Webhook API</span>
+                        </div>
+                        <button class="btn btn-primary btn-small" 
+                                onclick="copyWebhookUrl(${channel.id})"
+                                style="padding: 6px 12px; font-size: 0.85em;"
+                                title="Copy webhook API URL">
+                            📋 Copy URL
+                        </button>
+                    </div>
+                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <input type="text" 
+                               id="webhook-url-${channel.id}" 
+                               class="form-input" 
+                               value="${window.location.protocol}//${window.location.host}/api/webhook/channel-playlist?channelId=${channel.id}"
+                               readonly
+                               style="font-size: 0.85em; font-family: monospace; cursor: pointer;"
+                               onclick="this.select()"
+                        >
+                    </div>
+                    <div style="margin-top: 8px; font-size: 0.85em; color: #6b7280; display: flex; gap: 15px;">
+                        <a href="/webhook-tester.html" target="_blank" style="color: #667eea; text-decoration: none;">
+                            🧪 Test in Webhook Tester
+                        </a>
+                        <a href="/api/webhook/channel-playlist?channelId=${channel.id}" target="_blank" style="color: #667eea; text-decoration: none;">
+                            🔍 View API Response
+                        </a>
                     </div>
                 </div>
 
@@ -711,7 +858,9 @@
                     <button class="btn btn-danger btn-small" onclick="stopChannel(${channel.id})">
                         ⏹️ Stop Stream
                     </button>
-                    <button class="btn btn-secondary btn-small" onclick="deleteChannel(${channel.id})">
+                    <button class="btn btn-secondary btn-small" 
+                            onclick="deleteChannel(${channel.id})"
+                            ${isRunning ? 'disabled title="Stop stream to delete channel"' : ''}>
                         🗑️ Delete Channel
                     </button>
                 </div>
@@ -758,6 +907,12 @@
 
         // Open upload modal
         function openUploadModal(channelId, channelName) {
+            // Check if channel is running
+            if (channelStatuses.get(channelId)) {
+                showToast('⚠️ Stop the stream before uploading new videos', 'warning');
+                return;
+            }
+
             currentUploadChannelId = channelId;
             document.getElementById('uploadChannelName').textContent = channelName;
             document.getElementById('uploadModal').classList.add('active');
@@ -961,8 +1116,17 @@
         let draggedVideoIndex = null;
 
         function handleDragStart(e) {
+            const channelId = parseInt(e.target.dataset.channelId);
+
+            // Check if channel is running
+            if (channelStatuses.get(channelId)) {
+                e.preventDefault();
+                showToast('⚠️ Stop the stream before reordering videos', 'warning');
+                return false;
+            }
+
             draggedElement = e.target;
-            draggedChannelId = parseInt(e.target.dataset.channelId);
+            draggedChannelId = channelId;
             draggedVideoIndex = parseInt(e.target.dataset.videoIndex);
             e.target.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
@@ -1164,7 +1328,7 @@
             }
         }
 
-        // Update channel status display
+        // Update single channel status display
         function updateChannelStatus(channelId, isRunning) {
             const statusBadge = document.getElementById(`status-${channelId}`);
             if (statusBadge) {
@@ -1176,6 +1340,25 @@
                     statusBadge.innerHTML = '⏹️ STOPPED';
                 }
             }
+
+            // Update channel status map
+            const wasRunning = channelStatuses.get(channelId);
+            channelStatuses.set(channelId, isRunning);
+
+            // If status changed, re-render the channel card to update buttons/drag state
+            if (wasRunning !== isRunning) {
+                const channel = allChannels.find(c => c.id === channelId);
+                if (channel) {
+                    const channelCard = document.getElementById(`channel-${channelId}`);
+                    if (channelCard) {
+                        const newCard = createChannelCard(channel);
+                        channelCard.replaceWith(newCard);
+                        // Re-setup drag and drop after re-render
+                        setTimeout(() => setupVideoDragDrop(), 100);
+                    }
+                }
+            }
+
             updateStats();
         }
 
@@ -1208,6 +1391,88 @@
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
 
+        // Format time in MM:SS format
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Update playback status for all channels
+        async function updateAllPlaybackStatuses() {
+            for (const channel of allChannels) {
+                await updateChannelPlayback(channel.id);
+            }
+        }
+
+        // Update playback status for a specific channel
+        async function updateChannelPlayback(channelId) {
+            try {
+                const response = await fetch(`${API_URL}/channels/${channelId}/playback`);
+                const data = await response.json();
+
+                if (data.success && data.playback) {
+                    const playback = data.playback;
+                    const channel = allChannels.find(c => c.id === channelId);
+
+                    if (!channel || !channel.videos) return;
+
+                    // Clear all "now-playing" classes for this channel
+                    const channelVideos = document.querySelectorAll(`[data-channel-id="${channelId}"].video-item`);
+                    channelVideos.forEach((videoItem, index) => {
+                        const playbackInfo = document.getElementById(`playback-${channelId}-${index}`);
+                        const progressBar = document.getElementById(`progress-${channelId}-${index}`);
+                        const progressBarFill = document.getElementById(`progress-bar-${channelId}-${index}`);
+                        const playbackTime = document.getElementById(`playback-time-${channelId}-${index}`);
+
+                        // Remove highlighting from all videos
+                        videoItem.classList.remove('now-playing');
+                        if (playbackInfo) playbackInfo.style.display = 'none';
+                        if (progressBar) progressBar.style.display = 'none';
+                    });
+
+                    // If playing, highlight the current video
+                    if (playback.isPlaying && playback.currentIndex !== null) {
+                        const currentVideoItem = document.querySelector(
+                            `[data-channel-id="${channelId}"][data-video-index="${playback.currentIndex}"]`
+                        );
+
+                        if (currentVideoItem) {
+                            const playbackInfo = document.getElementById(`playback-${channelId}-${playback.currentIndex}`);
+                            const progressBar = document.getElementById(`progress-${channelId}-${playback.currentIndex}`);
+                            const progressBarFill = document.getElementById(`progress-bar-${channelId}-${playback.currentIndex}`);
+                            const playbackTime = document.getElementById(`playback-time-${channelId}-${playback.currentIndex}`);
+
+                            // Add highlighting
+                            currentVideoItem.classList.add('now-playing');
+
+                            // Show and update playback info
+                            if (playbackInfo) {
+                                playbackInfo.style.display = 'flex';
+                            }
+
+                            if (playbackTime) {
+                                const elapsedStr = formatTime(playback.elapsedTime);
+                                const totalStr = formatTime(playback.totalDuration);
+                                playbackTime.textContent = `${elapsedStr} / ${totalStr}`;
+                            }
+
+                            // Show and update progress bar
+                            if (progressBar && progressBarFill) {
+                                progressBar.style.display = 'block';
+                                const percent = playback.totalDuration > 0
+                                    ? (playback.elapsedTime / playback.totalDuration) * 100
+                                    : 0;
+                                progressBarFill.style.width = Math.min(100, Math.max(0, percent)).toFixed(1) + '%';
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                // Silently fail to avoid spamming console
+            }
+        }
+
         // Show toast notification
         function showToast(message, type = 'info') {
             const toast = document.getElementById('toast');
@@ -1217,6 +1482,24 @@
             setTimeout(() => {
                 toast.style.display = 'none';
             }, 3000);
+        }
+
+        // Copy webhook URL to clipboard
+        function copyWebhookUrl(channelId) {
+            const input = document.getElementById(`webhook-url-${channelId}`);
+            if (input) {
+                input.select();
+                input.setSelectionRange(0, 99999); // For mobile devices
+
+                // Copy to clipboard
+                navigator.clipboard.writeText(input.value).then(() => {
+                    showToast(`✅ Webhook URL for Channel ${channelId} copied!`, 'success');
+                }).catch(err => {
+                    // Fallback for older browsers
+                    document.execCommand('copy');
+                    showToast(`✅ Webhook URL for Channel ${channelId} copied!`, 'success');
+                });
+            }
         }
 
         // Initialize on page load

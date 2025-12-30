@@ -148,7 +148,7 @@ app.get('/api/channels/:id/details', async (req, res) => {
         const videosWithDurations = await Promise.all(channel.videos.map(async (video) => {
             const channelVideoPath = path.join(VIDEOS_DIR, `channel${channel.id}`, video.filename);
             const globalVideoPath = path.join(VIDEOS_DIR, video.filename);
-            
+
             let videoPath = null;
             if (fs.existsSync(channelVideoPath)) {
                 videoPath = channelVideoPath;
@@ -532,6 +532,320 @@ app.get('/api/channels/:id/status', (req, res) => {
     }
 });
 
+// Get channel playback status (current video, progress, etc.)
+app.get('/api/channels/:id/playback', (req, res) => {
+    try {
+        const channelId = parseInt(req.params.id);
+        const streamer = activeStreamers.get(channelId);
+
+        if (!streamer) {
+            return res.json({
+                success: true,
+                playback: {
+                    isPlaying: false,
+                    currentIndex: null,
+                    currentVideo: null,
+                    elapsedTime: 0,
+                    totalDuration: 0,
+                    remainingTime: 0
+                }
+            });
+        }
+
+        const playbackStatus = streamer.getPlaybackStatus();
+        res.json({ success: true, playback: playbackStatus });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ===== HELPER FUNCTIONS FOR WEBHOOKS =====
+
+// Get video duration using ffprobe
+function getVideoDuration(videoPath) {
+    return new Promise((resolve) => {
+        const ffprobe = spawn('ffprobe', [
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            videoPath
+        ]);
+
+        let output = '';
+        ffprobe.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+
+        ffprobe.on('close', () => {
+            const duration = parseFloat(output.trim());
+            resolve(isNaN(duration) ? 0 : Math.ceil(duration));
+        });
+
+        ffprobe.on('error', () => {
+            resolve(0);
+        });
+    });
+}
+
+// Format duration in HH:MM:SS
+function formatDuration(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Format bytes to human readable
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// ===== WEBHOOK API =====
+
+// Webhook: Get channel playlist information (works with channel ID or stream URL)
+app.get('/api/webhook/channel-playlist', async (req, res) => {
+    try {
+        const { channel, channelId, url, link } = req.query;
+
+        // Extract channel ID from various input formats
+        let resolvedChannelId = null;
+
+        if (channelId) {
+            resolvedChannelId = parseInt(channelId);
+        } else if (channel) {
+            resolvedChannelId = parseInt(channel);
+        } else if (url || link) {
+            const inputUrl = url || link;
+            // Extract from HLS URL: /hls/live1/stream.m3u8 -> 1
+            const hlsMatch = inputUrl.match(/\/hls\/live(\d+)/);
+            if (hlsMatch) {
+                resolvedChannelId = parseInt(hlsMatch[1]);
+            }
+            // Extract from embed URL: embed.html?channel=1
+            const embedMatch = inputUrl.match(/[?&]channel=(\d+)/);
+            if (embedMatch) {
+                resolvedChannelId = parseInt(embedMatch[1]);
+            }
+            // Extract from direct channel reference: live1, live2, etc.
+            const directMatch = inputUrl.match(/live(\d+)/);
+            if (directMatch && !resolvedChannelId) {
+                resolvedChannelId = parseInt(directMatch[1]);
+            }
+        }
+
+        if (!resolvedChannelId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing channel identifier',
+                message: 'Provide one of: channelId, channel, url, or link parameter',
+                examples: [
+                    '/api/webhook/channel-playlist?channelId=1',
+                    '/api/webhook/channel-playlist?url=http://localhost/hls/live1/stream.m3u8',
+                    '/api/webhook/channel-playlist?link=/embed.html?channel=1'
+                ]
+            });
+        }
+
+        // Load channel configuration
+        const config = loadConfig();
+        const channelData = config.channels.find(c => c.id === resolvedChannelId);
+
+        if (!channelData) {
+            return res.status(404).json({
+                success: false,
+                error: 'Channel not found',
+                channelId: resolvedChannelId
+            });
+        }
+
+        // Get channel status
+        const status = getChannelStatus(resolvedChannelId);
+
+        // Get playback status if channel is running
+        let playbackInfo = null;
+        if (status.running) {
+            const streamer = activeStreamers.get(resolvedChannelId);
+            if (streamer) {
+                playbackInfo = streamer.getPlaybackStatus();
+            }
+        }
+
+        // Get video details with durations
+        const videosWithDetails = await Promise.all(channelData.videos.map(async (video, index) => {
+            const channelVideoPath = path.join(VIDEOS_DIR, `channel${resolvedChannelId}`, video.filename);
+            const globalVideoPath = path.join(VIDEOS_DIR, video.filename);
+
+            let videoPath = null;
+            if (fs.existsSync(channelVideoPath)) {
+                videoPath = channelVideoPath;
+            } else if (fs.existsSync(globalVideoPath)) {
+                videoPath = globalVideoPath;
+            }
+
+            let duration = 0;
+            if (videoPath) {
+                try {
+                    duration = await getVideoDuration(videoPath);
+                } catch (error) {
+                    console.error(`Error getting duration for ${video.filename}:`, error);
+                }
+            }
+
+            return {
+                index: index,
+                filename: video.filename,
+                originalName: video.originalName || video.filename,
+                size: video.size,
+                sizeFormatted: formatBytes(video.size),
+                duration: duration,
+                durationFormatted: formatDuration(duration),
+                addedAt: video.addedAt,
+                isCurrentlyPlaying: playbackInfo && playbackInfo.isPlaying && playbackInfo.currentIndex === index
+            };
+        }));
+
+        // Calculate total duration
+        const totalDuration = videosWithDetails.reduce((sum, v) => sum + v.duration, 0);
+
+        // Build response
+        const host = req.get('host');
+        const protocol = req.protocol;
+
+        const response = {
+            success: true,
+            timestamp: new Date().toISOString(),
+            channel: {
+                id: channelData.id,
+                name: channelData.name,
+                enabled: channelData.enabled,
+                isLive: status.running,
+                videoCount: channelData.videos.length,
+                totalDuration: totalDuration,
+                totalDurationFormatted: formatDuration(totalDuration)
+            },
+            playback: status.running ? {
+                isPlaying: playbackInfo?.isPlaying || false,
+                currentVideoIndex: playbackInfo?.currentIndex ?? null,
+                currentVideoName: playbackInfo?.currentVideo ?? null,
+                elapsedTime: playbackInfo?.elapsedTime || 0,
+                elapsedTimeFormatted: formatDuration(playbackInfo?.elapsedTime || 0),
+                totalVideoDuration: playbackInfo?.totalDuration || 0,
+                totalVideoDurationFormatted: formatDuration(playbackInfo?.totalDuration || 0),
+                remainingTime: playbackInfo?.remainingTime || 0,
+                remainingTimeFormatted: formatDuration(playbackInfo?.remainingTime || 0),
+                playlistLength: playbackInfo?.playlistLength || 0
+            } : {
+                isPlaying: false,
+                message: 'Channel is offline'
+            },
+            playlist: videosWithDetails,
+            streamUrls: {
+                hls: `${protocol}://${host}/hls/live${resolvedChannelId}/stream.m3u8`,
+                rtmp: `rtmp://${host.split(':')[0]}/live${resolvedChannelId}/stream`,
+                embed: `${protocol}://${host}/embed.html?channel=${resolvedChannelId}`,
+                player: `${protocol}://${host}/player.html`
+            },
+            apiEndpoints: {
+                status: `${protocol}://${host}/api/channels/${resolvedChannelId}/status`,
+                playback: `${protocol}://${host}/api/channels/${resolvedChannelId}/playback`,
+                details: `${protocol}://${host}/api/channels/${resolvedChannelId}/details`,
+                start: `${protocol}://${host}/api/channels/${resolvedChannelId}/start`,
+                stop: `${protocol}://${host}/api/channels/${resolvedChannelId}/stop`
+            }
+        };
+
+        res.json(response);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
+// Webhook: Get playlist for all live channels
+app.get('/api/webhook/live-channels', async (req, res) => {
+    try {
+        const config = loadConfig();
+        const liveChannels = [];
+
+        for (const channel of config.channels) {
+            const status = getChannelStatus(channel.id);
+            if (status.running) {
+                // Get playback info
+                const streamer = activeStreamers.get(channel.id);
+                const playbackInfo = streamer ? streamer.getPlaybackStatus() : null;
+
+                // Get video details
+                const videosWithDetails = await Promise.all(channel.videos.map(async (video, index) => {
+                    const channelVideoPath = path.join(VIDEOS_DIR, `channel${channel.id}`, video.filename);
+                    const globalVideoPath = path.join(VIDEOS_DIR, video.filename);
+
+                    let videoPath = null;
+                    if (fs.existsSync(channelVideoPath)) {
+                        videoPath = channelVideoPath;
+                    } else if (fs.existsSync(globalVideoPath)) {
+                        videoPath = globalVideoPath;
+                    }
+
+                    let duration = 0;
+                    if (videoPath) {
+                        try {
+                            duration = await getVideoDuration(videoPath);
+                        } catch (error) {
+                            console.error(`Error getting duration:`, error);
+                        }
+                    }
+
+                    return {
+                        index: index,
+                        filename: video.filename,
+                        originalName: video.originalName || video.filename,
+                        duration: duration,
+                        durationFormatted: formatDuration(duration),
+                        isCurrentlyPlaying: playbackInfo && playbackInfo.isPlaying && playbackInfo.currentIndex === index
+                    };
+                }));
+
+                const host = req.get('host');
+                const protocol = req.protocol;
+
+                liveChannels.push({
+                    id: channel.id,
+                    name: channel.name,
+                    currentVideo: playbackInfo?.currentVideo ?? null,
+                    currentVideoIndex: playbackInfo?.currentIndex ?? null,
+                    elapsedTime: playbackInfo?.elapsedTime || 0,
+                    elapsedTimeFormatted: formatDuration(playbackInfo?.elapsedTime || 0),
+                    videoCount: channel.videos.length,
+                    playlist: videosWithDetails,
+                    streamUrl: `${protocol}://${host}/hls/live${channel.id}/stream.m3u8`,
+                    embedUrl: `${protocol}://${host}/embed.html?channel=${channel.id}`
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            liveChannelCount: liveChannels.length,
+            totalChannels: config.channels.length,
+            channels: liveChannels
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Start all channels
 app.post('/api/start-all', (req, res) => {
     try {
@@ -567,40 +881,6 @@ app.post('/api/stop-all', (req, res) => {
 // ===== HELPER FUNCTIONS =====
 
 // Get video duration using ffprobe
-function getVideoDuration(videoPath) {
-    return new Promise((resolve) => {
-        const ffprobe = spawn('ffprobe', [
-            '-v', 'error',
-            '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            videoPath
-        ]);
-
-        let output = '';
-        ffprobe.stdout.on('data', (data) => {
-            output += data.toString();
-        });
-
-        ffprobe.on('close', () => {
-            const duration = parseFloat(output.trim());
-            resolve(isNaN(duration) ? 0 : Math.ceil(duration));
-        });
-
-        ffprobe.on('error', () => {
-            resolve(0);
-        });
-    });
-}
-
-// Format duration in HH:MM:SS
-function formatDuration(seconds) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
-
 function generatePlaylist(channelId) {
     const config = loadConfig();
     const channel = config.channels.find(c => c.id === channelId);
@@ -718,18 +998,18 @@ async function startPusher(channelId) {
     ];
 
     const logStream = fs.createWriteStream(logPath, { flags: 'a' });
-    
+
     // Spawn with resource limits
     const ffmpeg = spawn('ffmpeg', ffmpegArgs, {
         stdio: ['ignore', 'pipe', 'pipe']
     });
 
     console.log(`[PUSHER] Channel ${channelId} spawned with PID: ${ffmpeg.pid}`);
-    
+
     // Limit log stream writes to prevent memory issues
     let logBuffer = [];
     let lastLogFlush = Date.now();
-    
+
     const flushLogs = () => {
         if (logBuffer.length > 0) {
             logStream.write(logBuffer.join(''));
@@ -737,14 +1017,14 @@ async function startPusher(channelId) {
             lastLogFlush = Date.now();
         }
     };
-    
+
     ffmpeg.stdout.on('data', (data) => {
         logBuffer.push(data.toString());
         if (logBuffer.length > 100 || (Date.now() - lastLogFlush > 5000)) {
             flushLogs();
         }
     });
-    
+
     ffmpeg.stderr.on('data', (data) => {
         logBuffer.push(data.toString());
         if (logBuffer.length > 100 || (Date.now() - lastLogFlush > 5000)) {
@@ -763,15 +1043,15 @@ async function startPusher(channelId) {
     ffmpeg.on('exit', async (code) => {
         console.log(`[PUSHER] FFmpeg exited with code: ${code}`);
         flushLogs();
-        
+
         // Clean up event listeners
         ffmpeg.stdout.removeAllListeners();
         ffmpeg.stderr.removeAllListeners();
         ffmpeg.removeAllListeners();
-        
+
         // Close log stream
         logStream.end();
-        
+
         if (fs.existsSync(pidPath)) fs.unlinkSync(pidPath);
         activeFfmpeg.delete(channelId);
 
@@ -880,7 +1160,7 @@ function getChannelStatus(channelId) {
             return { running: false };
         }
     }
-    
+
     return { running: false };
 }
 
@@ -892,38 +1172,38 @@ function getChannelStatus(channelId) {
  */
 function cleanupOldHLSSegments() {
     console.log('[CLEANUP] Running HLS segment cleanup...');
-    
+
     const hlsBaseDir = '/var/www/html/hls';
-    
+
     // Fallback for macOS development
     if (!fs.existsSync(hlsBaseDir)) {
         console.log('[CLEANUP] Docker HLS path not found, skipping...');
         return;
     }
-    
+
     try {
         // Get all live channel directories
         const channelDirs = fs.readdirSync(hlsBaseDir)
             .filter(dir => dir.startsWith('live'))
             .map(dir => path.join(hlsBaseDir, dir));
-        
+
         let totalCleaned = 0;
-        
+
         channelDirs.forEach(channelDir => {
             if (!fs.existsSync(channelDir)) return;
-            
+
             const files = fs.readdirSync(channelDir);
             const now = Date.now();
             const maxAge = 5 * 60 * 1000; // 5 minutes
-            
+
             files.forEach(file => {
                 if (!file.endsWith('.ts')) return; // Only cleanup .ts segments
-                
+
                 const filePath = path.join(channelDir, file);
                 try {
                     const stats = fs.statSync(filePath);
                     const age = now - stats.mtimeMs;
-                    
+
                     // Delete segments older than 5 minutes
                     if (age > maxAge) {
                         fs.unlinkSync(filePath);
@@ -934,7 +1214,7 @@ function cleanupOldHLSSegments() {
                 }
             });
         });
-        
+
         if (totalCleaned > 0) {
             console.log(`[CLEANUP] Removed ${totalCleaned} old HLS segments`);
         }
@@ -950,11 +1230,11 @@ function cleanupZombieProcesses() {
     try {
         exec('ps aux | grep ffmpeg | grep -v grep', (error, stdout) => {
             if (error) return; // No processes found
-            
+
             const lines = stdout.trim().split('\n');
             const runningPids = new Set();
             const orphanedPids = [];
-            
+
             lines.forEach(line => {
                 const parts = line.trim().split(/\s+/);
                 if (parts.length > 1) {
@@ -962,10 +1242,10 @@ function cleanupZombieProcesses() {
                     runningPids.add(pid);
                 }
             });
-            
+
             // Count FFmpeg processes per channel
             const processCountPerChannel = new Map();
-            
+
             // Check our tracked FFmpeg processes
             activeFfmpeg.forEach((ffmpegProcess, channelId) => {
                 if (ffmpegProcess && ffmpegProcess.pid) {
@@ -977,32 +1257,32 @@ function cleanupZombieProcesses() {
                     }
                 }
             });
-            
+
             // If total FFmpeg processes exceed expected count significantly, kill orphans
             const expectedPerChannel = STREAM_MODE === 'rtmp' ? 1 : 2;
             const expectedCount = activeStreamers.size * expectedPerChannel;
-            
+
             // Only clean up if we have 5x more than expected (very lenient)
             if (runningPids.size > expectedCount * 5 && activeStreamers.size > 0) {
                 console.warn(`[CLEANUP] Excessive FFmpeg processes detected (${runningPids.size}), expected ~${expectedCount}`);
-                
+
                 // Kill FFmpeg processes that aren't in our tracking
                 let killedCount = 0;
                 runningPids.forEach(pid => {
                     let isTracked = false;
-                    
+
                     // Check if tracked in activeFfmpeg (pipe mode)
                     activeFfmpeg.forEach(proc => {
                         if (proc && proc.pid === pid) isTracked = true;
                     });
-                    
+
                     // Check if tracked in activeStreamers (rtmp mode)
                     activeStreamers.forEach(streamer => {
                         if (streamer.currentProcess && streamer.currentProcess.pid === pid) {
                             isTracked = true;
                         }
                     });
-                    
+
                     if (!isTracked) {
                         console.warn(`[CLEANUP] Killing orphaned FFmpeg process PID: ${pid}`);
                         try {
@@ -1013,7 +1293,7 @@ function cleanupZombieProcesses() {
                         }
                     }
                 });
-                
+
                 if (killedCount > 0) {
                     console.log(`[CLEANUP] Killed ${killedCount} orphaned processes`);
                 }
@@ -1031,13 +1311,13 @@ function enforceProcessLimits() {
     try {
         exec('ps aux | grep "ffmpeg.*live" | grep -v grep | wc -l', (error, stdout) => {
             if (error) return;
-            
+
             const processCount = parseInt(stdout.trim());
             const activeChannels = activeStreamers.size;
             // In RTMP mode: 1 process per channel; In PIPE mode: 2 per channel
             const expectedPerChannel = STREAM_MODE === 'rtmp' ? 1 : 2;
             const expectedProcesses = activeChannels * expectedPerChannel;
-            
+
             // Only trigger if we have 3x more processes than expected (very lenient)
             if (processCount > expectedProcesses * 3 && activeChannels > 0) {
                 console.warn(`[CLEANUP] ⚠️ High process count: ${processCount} FFmpeg processes, expected ~${expectedProcesses}`);
@@ -1071,13 +1351,13 @@ console.log('[CLEANUP] Aggressive limiter: Every 5 minutes');
 // Graceful shutdown handler
 process.on('SIGTERM', async () => {
     console.log('\n[SHUTDOWN] Received SIGTERM, shutting down gracefully...');
-    
+
     // Stop all streamers
     for (const [channelId, streamer] of activeStreamers) {
         console.log(`[SHUTDOWN] Stopping streamer ${channelId}...`);
         streamer.stop();
     }
-    
+
     // Stop all FFmpeg processes
     for (const [channelId, ffmpeg] of activeFfmpeg) {
         console.log(`[SHUTDOWN] Stopping FFmpeg ${channelId}...`);
@@ -1087,13 +1367,13 @@ process.on('SIGTERM', async () => {
             // Already stopped
         }
     }
-    
+
     // Destroy all pipes
     for (const [channelId, pipe] of activePipes) {
         console.log(`[SHUTDOWN] Destroying pipe ${channelId}...`);
         await pipe.destroy();
     }
-    
+
     console.log('[SHUTDOWN] Cleanup complete, exiting...');
     process.exit(0);
 });
